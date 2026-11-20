@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -1995,6 +1994,23 @@
     const SESSION_SECONDS = 360; // Exatamente 6 minutos por sessão
     const SESSION_MS = SESSION_SECONDS * 1000;
     const GLOBAL_EPOCH_SEC = 1735689600; // Marco fixo UTC (01/01/2025 00:00:00 UTC)
+    const QUIT_CYCLE_SECONDS = 45; // Ciclo determinístico de movimentação/saída da fila
+    const QUIT_BATCH_SIZE = 14; // Quantidade rotativa de jogadores que saem temporariamente
+
+    const PROFILE_BG_PALETTE = [
+      '#3b82f6', '#8b5cf6', '#0d9488', '#16a34a',
+      '#d97706', '#e11d48', '#4f46e5', '#0284c7',
+      '#059669', '#9333ea', '#c2410c', '#475569'
+    ];
+
+    function getAvatarColorForNick(nick) {
+      const str = String(nick || 'J');
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+      }
+      return PROFILE_BG_PALETTE[hash % PROFILE_BG_PALETTE.length];
+    }
 
     const MQTT_URL = 'wss://broker.emqx.io:8084/mqtt';
     const CHANNEL_PREFIX = 'jogargta_comunidade_v2_6min_123';
@@ -2043,19 +2059,32 @@
       const secIntoTurn = elapsedSec % SESSION_SECONDS;
       const remainingSec = SESSION_SECONDS - secIntoTurn;
 
-      const activeBaseIdx = turnIndex % FIXED_123_PLAYERS.length;
+      const totalBase = FIXED_123_PLAYERS.length;
+      const activeBaseIdx = turnIndex % totalBase;
       const currentPlayerNick = FIXED_123_PLAYERS[activeBaseIdx];
 
-      // Próximos 123 jogadores da fila fixa rotacionada
+      // Janela de saídas/quits temporários sincronizada pelo relógio global
+      const quitCycleIdx = Math.floor(elapsedSec / QUIT_CYCLE_SECONDS);
+      const quitOffset = (quitCycleIdx * 7) % totalBase;
+      const quitIndices = new Set();
+      for (let q = 0; q < QUIT_BATCH_SIZE; q++) {
+        const candidateIdx = (quitOffset + q * 3) % totalBase;
+        if (candidateIdx !== activeBaseIdx) {
+          quitIndices.add(candidateIdx);
+        }
+      }
+
+      // Ordem rotativa contínua: quem terminou o turno anterior vai para o final da fila
       const queueItems = [];
-      for (let i = 1; i <= FIXED_123_PLAYERS.length; i++) {
-        const idx = (activeBaseIdx + i) % FIXED_123_PLAYERS.length;
+      for (let i = 1; i <= totalBase; i++) {
+        const idx = (activeBaseIdx + i) % totalBase;
+        if (quitIndices.has(idx)) continue;
         const nick = FIXED_123_PLAYERS[idx];
         queueItems.push({
           nick,
           isReal: false,
           isMe: false,
-          color: '#334155'
+          color: getAvatarColorForNick(nick)
         });
       }
 
@@ -2086,7 +2115,7 @@
           nick: realUser.nick,
           isReal: true,
           isMe: realUser.clientId === clientId,
-          color: realUser.color || '#53fc18'
+          color: realUser.color || getAvatarColorForNick(realUser.nick)
         });
       });
 
@@ -2099,6 +2128,7 @@
       return {
         nowMs,
         turnIndex,
+        quitCycleIdx,
         remainingSec,
         currentPlayerNick,
         queueItems,
@@ -2114,12 +2144,17 @@
       return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
     }
 
+    // Estimativa calibrada entre ~1h00m e ~4h00m de acordo com a posição na fila
     function formatWaitDuration(position) {
       if (position <= 0) return '—';
-      const totalMins = position * 6;
-      const hours = Math.floor(totalMins / 60);
-      const mins = totalMins % 60;
-      if (hours > 0) return `${hours}h ${mins}min`;
+      const maxPos = Math.max(20, FIXED_123_PLAYERS.length);
+      const ratio = Math.max(0, Math.min(1, position / maxPos));
+      const minMinutes = 60;
+      const maxMinutes = 240;
+      const rawMinutes = Math.round(minMinutes + ratio * (maxMinutes - minMinutes));
+      const hours = Math.floor(rawMinutes / 60);
+      const mins = rawMinutes % 60;
+      if (hours > 0) return `${hours}h ${String(mins).padStart(2, '0')}min`;
       return `${mins} min`;
     }
 
@@ -2537,7 +2572,7 @@
       podiumEl.innerHTML = HALL_RANKING.slice(0, 3).map(p => `
         <div class="podium-card rank-${p.rank}">
           <div class="podium-rank">#${p.rank}</div>
-          <div class="podium-avatar">${p.nick.charAt(0).toUpperCase()}</div>
+          <div class="podium-avatar" style="background: ${getAvatarColorForNick(p.nick)}; color: #ffffff; border-color: transparent;">${p.nick.charAt(0).toUpperCase()}</div>
           <div class="podium-name">${p.nick}</div>
           <div class="podium-stats">
             <span>🕒 ${p.hours}</span>
@@ -2552,7 +2587,7 @@
         <div class="hall-row">
           <div class="hall-row-left">
             <span class="hall-num">${String(p.rank).padStart(2, '0')}</span>
-            <div class="hall-avatar-sm">${p.nick.charAt(0).toUpperCase()}</div>
+            <div class="hall-avatar-sm" style="background: ${getAvatarColorForNick(p.nick)}; color: #ffffff; border-color: transparent;">${p.nick.charAt(0).toUpperCase()}</div>
             <div>
               <div class="hall-info-name">${p.nick}</div>
               <div class="hall-info-meta">
@@ -2577,7 +2612,7 @@
 
         sessionEvents = [
           { text: `${snap.currentPlayerNick} assumiu o controle (turno de 06:00)`, color: 'green', ts: now - (SESSION_SECONDS - snap.remainingSec) * 1000 },
-          { text: `${prev1} encerrou a sessão de 6 minutos`, color: 'blue', ts: now - (SESSION_SECONDS - snap.remainingSec) * 1000 - 4000 },
+          { text: `${prev1} encerrou o turno e retornou ao final da fila`, color: 'blue', ts: now - (SESSION_SECONDS - snap.remainingSec) * 1000 - 4000 },
           { text: `${prev2} completou desafio de fuga em Vice Beach`, color: 'amber', ts: now - 420000 },
           { text: `${prev3} recebeu +9 likes da comunidade`, color: 'green', ts: now - 780000 }
         ];
@@ -2616,6 +2651,8 @@
     // =========================================================================
     // 9. RENDERIZAÇÃO GERAL A CADA SEGUNDO
     // =========================================================================
+    let lastQuitCycleIdx = -1;
+
     function renderAll() {
       const snap = computeQueueSnapshot();
       const formattedTime = formatTimer(snap.remainingSec);
@@ -2624,18 +2661,33 @@
       // Relógio UTC
       document.getElementById('utc-clock').textContent = `UTC ${new Date(snap.nowMs).toISOString().slice(11, 19)}`;
 
-      // Detecta virada de turno de 6 minutos
+      // Detecta virada de turno de 6 minutos (quem jogou volta para o final da fila)
       if (lastTurnIndex !== -1 && lastTurnIndex !== snap.turnIndex) {
-        pushSessionEvent(`${snap.currentPlayerNick} iniciou turno de 6 minutos`, 'green', false);
+        const finishedPlayer = FIXED_123_PLAYERS[lastTurnIndex % FIXED_123_PLAYERS.length];
+        pushSessionEvent(`${finishedPlayer} encerrou o turno e voltou para o fim da fila`, 'blue', false);
+        pushSessionEvent(`${snap.currentPlayerNick} assumiu o controle (turno de 06:00)`, 'green', false);
         if (myQueueTicket && snap.myPos === 1) {
           triggerYourTurnModal();
         }
       }
       lastTurnIndex = snap.turnIndex;
 
+      // Movimentação/saída periódica sincronizada pelo relógio global
+      if (lastQuitCycleIdx !== -1 && lastQuitCycleIdx !== snap.quitCycleIdx) {
+        const leaverNick = FIXED_123_PLAYERS[(snap.quitCycleIdx * 7) % FIXED_123_PLAYERS.length];
+        if (leaverNick !== snap.currentPlayerNick) {
+          pushSessionEvent(`${leaverNick} deixou a fila de espera`, 'amber', false);
+        }
+      }
+      lastQuitCycleIdx = snap.quitCycleIdx;
+
       // Jogador Atual
       document.getElementById('active-player-name').textContent = snap.currentPlayerNick;
-      document.getElementById('active-player-avatar').textContent = snap.currentPlayerNick.charAt(0).toUpperCase();
+      const activeAvatar = document.getElementById('active-player-avatar');
+      activeAvatar.textContent = snap.currentPlayerNick.charAt(0).toUpperCase();
+      activeAvatar.style.background = getAvatarColorForNick(snap.currentPlayerNick);
+      activeAvatar.style.color = '#ffffff';
+      activeAvatar.style.borderColor = 'transparent';
       document.getElementById('bottom-playing-nick').textContent = snap.currentPlayerNick;
       document.getElementById('turn-id').textContent = snap.turnIndex % 10000;
 
@@ -2762,11 +2814,12 @@
 
       const rowsHtml = snap.queueItems.map((item, idx) => {
         const pos = idx + 1;
+        const avatarBg = item.color || getAvatarColorForNick(item.nick);
         return `
           <div class="queue-row ${item.isMe ? 'is-me' : ''}" id="${item.isMe ? 'my-fila-item' : ''}">
             <div class="queue-row-left">
               <span class="queue-rank">#${pos}</span>
-              <div class="mini-avatar" style="${item.isReal ? `background:${item.color}; color:#0b0d12;` : ''}">
+              <div class="mini-avatar" style="background:${avatarBg}; color:#ffffff;">
                 ${escapeHTML(item.nick.charAt(0).toUpperCase())}
               </div>
               <span class="queue-nick">${escapeHTML(item.nick)}</span>
@@ -2785,23 +2838,23 @@
       const listEl = document.getElementById('online-users-list');
       const realPeers = Object.values(onlinePeersMap).filter(p => snap.nowMs - p.lastSeen < 30000);
       const sampleActive = [
-        { nick: snap.currentPlayerNick, status: 'No controle agora', color: '#38bdf8' },
+        { nick: snap.currentPlayerNick, status: 'No controle agora', color: getAvatarColorForNick(snap.currentPlayerNick) },
         ...realPeers.map(p => ({
           nick: p.nick,
           status: p.inQueue ? 'Na fila de espera' : 'No canal',
-          color: p.color || '#53fc18'
+          color: p.color || getAvatarColorForNick(p.nick)
         })),
         ...snap.queueItems.slice(0, 18).map(q => ({
           nick: q.nick,
           status: 'Aguardando turno',
-          color: '#334155'
+          color: q.color || getAvatarColorForNick(q.nick)
         }))
       ];
 
       listEl.innerHTML = sampleActive.map(u => `
         <div class="queue-row">
           <div class="queue-row-left">
-            <div class="mini-avatar" style="background: ${u.color}; color: ${u.color === '#334155' ? '#f1f5f9' : '#0b0d12'};">
+            <div class="mini-avatar" style="background: ${u.color}; color: #ffffff;">
               ${escapeHTML(u.nick.charAt(0).toUpperCase())}
             </div>
             <div>
