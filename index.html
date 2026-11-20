@@ -1,0 +1,1749 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jogar GTA VI — Cloud Gaming Comunitário</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- MQTT.js para sincronização real-time entre todos os usuários no GitHub Pages sem servidor próprio -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <!-- Ícones Lucide -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            vice: {
+              bg: '#110b1c',
+              card: '#191128',
+              panel: '#211735',
+              border: '#2f214a',
+              pink: '#ff2a85',
+              cyan: '#00f0ff',
+              yellow: '#ffd000',
+              green: '#22c55e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #110b1c;
+      color: #f3f0fa;
+      background-image: 
+        radial-gradient(circle at 15% 10%, rgba(255, 42, 133, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 20%, rgba(0, 240, 255, 0.07) 0%, transparent 40%);
+    }
+    /* Scrollbar personalizada estilo Vice City */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #140d21;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #352554;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #ff2a85;
+    }
+    .vice-glow-pink {
+      box-shadow: 0 0 25px rgba(255, 42, 133, 0.25);
+    }
+    .vice-glow-cyan {
+      box-shadow: 0 0 25px rgba(0, 240, 255, 0.2);
+    }
+    .vice-gradient-text {
+      background: linear-gradient(90deg, #ff2a85, #ff7b54, #ffd000);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .scanline {
+      background: linear-gradient(
+        to bottom,
+        rgba(255,255,255,0),
+        rgba(255,255,255,0) 50%,
+        rgba(0,0,0,0.18) 50%,
+        rgba(0,0,0,0.18)
+      );
+      background-size: 100% 4px;
+    }
+    @keyframes pulse-border {
+      0%, 100% { border-color: rgba(255, 42, 133, 0.6); }
+      50% { border-color: rgba(0, 240, 255, 0.9); }
+    }
+    .animate-vice-border {
+      animation: pulse-border 2.5s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-vice-pink selection:text-white">
+
+  <!-- BARRA SUPERIOR / NAVBAR -->
+  <header class="sticky top-0 z-40 bg-[#140d22]/95 backdrop-blur-md border-b border-vice-border">
+    <div class="max-w-[1440px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <!-- Esquerda: Logo + Navegação -->
+      <div class="flex items-center gap-6">
+        <a href="#" class="flex items-center gap-2.5 group">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-vice-pink via-purple-600 to-vice-cyan p-[1.5px] shadow-lg">
+            <div class="w-full h-full bg-[#140d22] rounded-[10px] flex items-center justify-center font-black text-sm tracking-tighter">
+              <span class="text-white">J</span><span class="text-vice-pink">G</span>
+            </div>
+          </div>
+          <div class="flex flex-col">
+            <div class="flex items-center gap-1.5">
+              <span class="font-extrabold text-white tracking-tight text-base sm:text-lg">Jogar GTA</span>
+              <span class="text-[10px] font-black px-1.5 py-0.5 rounded bg-gradient-to-r from-vice-pink to-orange-500 text-white tracking-wider">VI</span>
+            </div>
+            <span class="text-[10px] text-gray-400 hidden sm:block leading-none">Cloud Gaming Comunitário • Leonida</span>
+          </div>
+        </a>
+
+        <nav class="hidden md:flex items-center gap-1 text-xs font-bold tracking-wide">
+          <a href="#sessao" class="px-3 py-2 rounded-lg bg-vice-panel text-white border border-vice-border/80">JOGAR</a>
+          <a href="#comunidade" class="px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-vice-panel/50 transition">COMUNIDADE</a>
+          <a href="#hall" class="px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-vice-panel/50 transition">HALL DA FAMA</a>
+          <button onclick="openRulesModal()" class="px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-vice-panel/50 transition">REGRAS</button>
+        </nav>
+      </div>
+
+      <!-- Direita: Status Ao Vivo + Perfil do Usuário -->
+      <div class="flex items-center gap-3">
+        <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-vice-panel/90 border border-vice-border text-xs font-semibold">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          <span class="w-2 h-2 rounded-full bg-emerald-400 -ml-4"></span>
+          <span class="text-gray-200">CLUSTER ONLINE</span>
+          <span class="text-gray-500">|</span>
+          <span id="header-sync-status" class="text-vice-cyan font-mono text-[11px]">SYNC UTC</span>
+        </div>
+
+        <!-- Botão / Card de Conta -->
+        <div id="user-header-area">
+          <!-- Renderizado via JS -->
+        </div>
+      </div>
+    </div>
+    <div class="bg-[#181028] border-t border-vice-border/50 px-4 py-1 text-[11px] text-gray-400 text-center sm:text-left">
+      <div class="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-2">
+        <span>Plataforma comunitária de acesso remoto por fila rotativa (10 minutos por sessão). Sem vínculo oficial com Rockstar Games.</span>
+        <span class="font-mono text-[10px] text-gray-500" id="utc-clock-display">UTC --:--:--</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTEÚDO PRINCIPAL -->
+  <main class="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 py-6 space-y-8">
+
+    <!-- TÍTULO DA SESSÃO -->
+    <div id="sessao" class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <h1 class="text-lg sm:text-xl font-extrabold tracking-tight text-white uppercase">
+          Jogue GTA VI de Graça com a Comunidade
+        </h1>
+        <span class="px-2 py-0.5 text-[11px] font-bold rounded bg-vice-panel border border-vice-border text-gray-300">18+</span>
+        <span class="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-bold rounded-full bg-vice-pink/15 border border-vice-pink/40 text-vice-pink">
+          10:00 MIN / TURNO
+        </span>
+      </div>
+
+      <div class="flex items-center gap-4 text-xs text-gray-400">
+        <div class="flex items-center gap-1.5">
+          <i data-lucide="server" class="w-3.5 h-3.5 text-vice-cyan"></i>
+          <span>Nó: <strong class="text-gray-200 font-mono">BR-SP-04 (PS5 Pro DevKit)</strong></span>
+        </div>
+        <div class="hidden sm:flex items-center gap-1.5">
+          <i data-lucide="activity" class="w-3.5 h-3.5 text-emerald-400"></i>
+          <span>Latência: <strong id="ping-display" class="text-emerald-400 font-mono">14 ms</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- GRID PRINCIPAL: PAINEL DE SESSÃO REMOTA (ESQUERDA) + FILA & CHAT (DIREITA) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- COLUNA ESQUERDA (8 cols): CONSOLE REMOTO / STATUS SEM VÍDEO + CONTROLES -->
+      <div class="lg:col-span-8 space-y-4">
+        
+        <!-- TELA DO CONSOLE REMOTO (SEM VÍDEO, INTERFACE DE SESSÃO ATIVA) -->
+        <div class="relative rounded-2xl bg-[#150e24] border border-vice-border overflow-hidden shadow-2xl">
+          <!-- Fundo estilizado Vice City Grid / Telemetry -->
+          <div class="absolute inset-0 scanline pointer-events-none opacity-40"></div>
+          <div class="absolute -top-24 -right-24 w-72 h-72 bg-vice-pink/15 rounded-full blur-3xl pointer-events-none"></div>
+          <div class="absolute -bottom-24 -left-24 w-72 h-72 bg-vice-cyan/10 rounded-full blur-3xl pointer-events-none"></div>
+
+          <!-- Barra Superior Interna do Terminal -->
+          <div class="relative z-10 px-5 py-3.5 bg-[#1b122e]/90 border-b border-vice-border flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+              <span class="px-2.5 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                SESSÃO EM ANDAMENTO
+              </span>
+              <span class="text-xs text-gray-400 font-mono hidden sm:inline">BUILD: v0.94.2-LEONIDA</span>
+            </div>
+
+            <div class="flex items-center gap-2 text-xs font-mono text-gray-300">
+              <span class="px-2 py-1 rounded bg-vice-bg border border-vice-border">TURNO #<span id="session-turn-number">14820</span></span>
+              <span class="px-2 py-1 rounded bg-vice-bg border border-vice-border text-vice-cyan">60 FPS • INPUT DIRETO</span>
+            </div>
+          </div>
+
+          <!-- Corpo Central: Quem está jogando + Cronômetro de 10 minutos + Ação do Usuário -->
+          <div class="relative z-10 p-6 sm:p-8 flex flex-col justify-between min-h-[390px] gap-6">
+            
+            <!-- Bloco Superior: Jogador Atual no Controle -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+              <!-- Card do Jogador Atual -->
+              <div class="md:col-span-7 bg-[#1d1431]/95 border border-vice-border rounded-2xl p-5 flex items-center gap-4 shadow-lg">
+                <div id="current-player-avatar" class="w-16 h-16 rounded-2xl bg-gradient-to-br from-vice-pink to-purple-700 flex items-center justify-center text-2xl font-black text-white shrink-0 shadow-inner border border-white/15">
+                  A
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-vice-cyan">NO CONTROLE AGORA</span>
+                    <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-vice-pink/20 text-vice-pink border border-vice-pink/30">JOGANDO</span>
+                  </div>
+                  <h2 id="current-player-name" class="text-xl sm:text-2xl font-black text-white truncate">
+                    Carregando...
+                  </h2>
+                  <div class="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-gray-400">
+                    <span class="flex items-center gap-1"><i data-lucide="gamepad-2" class="w-3.5 h-3.5 text-vice-pink"></i> DualSense Virtual</span>
+                    <span>•</span>
+                    <span id="current-player-region" class="font-mono text-gray-300">BR • SP</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card do Cronômetro de 10 Minutos -->
+              <div class="md:col-span-5 bg-[#1d1431]/95 border border-vice-border rounded-2xl p-5 flex flex-col items-center justify-center text-center shadow-lg">
+                <span class="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-1">TEMPO RESTANTE DA SESSÃO</span>
+                <div id="session-timer-big" class="font-mono text-4xl sm:text-5xl font-black tracking-tight text-white">
+                  10:00
+                </div>
+                <div class="w-full bg-vice-bg h-2 rounded-full mt-3 overflow-hidden border border-vice-border">
+                  <div id="session-progress-bar" class="h-full bg-gradient-to-r from-vice-cyan via-vice-pink to-vice-yellow transition-all duration-1000" style="width: 100%"></div>
+                </div>
+                <span class="text-[11px] text-gray-400 mt-2">Troca automática a cada 10 minutos</span>
+              </div>
+            </div>
+
+            <!-- Área Central de Status da Fila do Usuário / CTA -->
+            <div id="user-queue-hero-box" class="bg-gradient-to-r from-[#211638] via-[#1c1330] to-[#211638] border border-vice-border rounded-2xl p-5 sm:p-6">
+              <!-- Preenchido dinamicamente pelo JS conforme estado (Fora da fila / Na fila / Sua vez!) -->
+            </div>
+
+            <!-- Rodapé Interno: Próximos 3 na fila + Avaliação da Gameplay Atual -->
+            <div class="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-vice-border/60 text-xs">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-gray-400 font-semibold">A seguir:</span>
+                <div id="next-in-queue-pills" class="flex items-center gap-1.5 flex-wrap">
+                  <!-- Pills dos próximos 3 jogadores -->
+                </div>
+              </div>
+
+              <!-- Avaliação da Sessão Atual -->
+              <div class="flex items-center gap-2">
+                <span class="text-gray-400 hidden sm:inline">Avaliar jogada:</span>
+                <button onclick="voteCurrentPlayer('like')" id="btn-vote-like" class="px-3 py-1.5 rounded-lg bg-vice-panel hover:bg-emerald-500/20 border border-vice-border hover:border-emerald-500/40 text-gray-200 flex items-center gap-1.5 transition">
+                  <i data-lucide="thumbs-up" class="w-3.5 h-3.5 text-emerald-400"></i>
+                  <span id="current-likes-count" class="font-mono font-bold">14</span>
+                </button>
+                <button onclick="voteCurrentPlayer('dislike')" id="btn-vote-dislike" class="px-3 py-1.5 rounded-lg bg-vice-panel hover:bg-rose-500/20 border border-vice-border hover:border-rose-500/40 text-gray-200 flex items-center gap-1.5 transition">
+                  <i data-lucide="thumbs-down" class="w-3.5 h-3.5 text-rose-400"></i>
+                  <span id="current-dislikes-count" class="font-mono font-bold">2</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BARRA INFERIOR DE ESTATÍSTICAS DO CLUSTER (IGUAL À IMAGEM 2) -->
+        <div class="bg-vice-card border border-vice-border rounded-2xl px-5 py-4 flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-vice-panel border border-vice-border flex items-center justify-center text-vice-cyan">
+              <i data-lucide="gamepad-2" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="text-[11px] font-bold uppercase tracking-wider text-gray-400">JOGANDO AGORA</div>
+              <div id="footer-playing-name" class="font-bold text-white text-sm sm:text-base">---</div>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-6 sm:gap-8">
+            <div>
+              <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">ONLINE NO SITE</div>
+              <div class="flex items-center gap-1.5 font-mono font-bold text-sm text-white">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span id="stat-online-count">318</span>
+              </div>
+            </div>
+
+            <div>
+              <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">SESSÕES HOJE</div>
+              <div id="stat-sessions-today" class="font-mono font-bold text-sm text-white">144</div>
+            </div>
+
+            <div>
+              <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">NA FILA</div>
+              <div id="stat-queue-total" class="font-mono font-bold text-sm text-vice-yellow">242</div>
+            </div>
+
+            <div>
+              <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">TEMPO RESTANTE</div>
+              <div id="stat-time-left" class="font-mono font-bold text-sm text-vice-cyan">10:00</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLUNA DIREITA (4 cols): CARD DA FILA + ABAS (FILA DO JOGO / CHAT / REGRAS) -->
+      <div class="lg:col-span-4 bg-vice-card border border-vice-border rounded-2xl overflow-hidden flex flex-col h-[560px] shadow-xl">
+        
+        <!-- Topo: Status da Posição do Usuário na Fila -->
+        <div class="p-4 bg-[#1e1431] border-b border-vice-border space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <div class="text-xs font-bold text-vice-cyan flex items-center gap-1.5">
+                <span id="sidebar-queue-status-title">Fila Global Ativa • <span id="sidebar-total-badge">242</span> jogadores</span>
+              </div>
+              <p id="sidebar-queue-eta" class="text-[11px] text-gray-400 mt-0.5">
+                Entre na fila para reservar seus 10 minutos
+              </p>
+            </div>
+            <button onclick="toggleSoundNotification()" id="btn-notify-bell" title="Notificar quando chegar minha vez" class="p-2 rounded-xl bg-vice-panel border border-vice-border text-gray-300 hover:text-vice-yellow transition">
+              <i data-lucide="bell" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Abas: Fila do jogo | Chat | Regras -->
+          <div class="grid grid-cols-3 gap-1.5 bg-[#130c20] p-1 rounded-xl border border-vice-border/70">
+            <button onclick="switchRightTab('queue')" id="tab-btn-queue" class="py-2 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition bg-vice-panel text-white shadow">
+              <i data-lucide="users" class="w-3.5 h-3.5 text-vice-cyan"></i>
+              <span>Fila (<span id="tab-queue-count">242</span>)</span>
+            </button>
+            <button onclick="switchRightTab('chat')" id="tab-btn-chat" class="py-2 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition text-gray-400 hover:text-white">
+              <i data-lucide="message-square" class="w-3.5 h-3.5 text-vice-pink"></i>
+              <span>Chat</span>
+              <span id="chat-unread-dot" class="hidden w-2 h-2 rounded-full bg-vice-pink"></span>
+            </button>
+            <button onclick="switchRightTab('rules')" id="tab-btn-rules" class="py-2 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition text-gray-400 hover:text-white">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-vice-yellow"></i>
+              <span>Regras</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- CONTEÚDO DA ABA 1: FILA DO JOGO (242 NICKS FIXOS + USUÁRIOS REAIS) -->
+        <div id="tab-content-queue" class="flex-1 flex flex-col min-h-0">
+          <div class="px-4 py-2 bg-[#160f24] border-b border-vice-border/60 flex items-center justify-between text-[11px] text-gray-400">
+            <span>Ordem sincronizada em tempo real</span>
+            <button onclick="scrollToMyPosition()" id="btn-find-me" class="hidden text-vice-cyan hover:underline font-semibold">Ir para minha posição</button>
+          </div>
+          <div id="queue-list-container" class="flex-1 overflow-y-auto p-3 space-y-1.5">
+            <!-- Lista renderizada via JS -->
+          </div>
+        </div>
+
+        <!-- CONTEÚDO DA ABA 2: CHAT AO VIVO REAL (SEM BOTS!) -->
+        <div id="tab-content-chat" class="hidden flex-1 flex flex-col min-h-0">
+          <div class="px-4 py-2 bg-[#160f24] border-b border-vice-border/60 flex items-center justify-between text-[11px]">
+            <span class="text-emerald-400 flex items-center gap-1.5 font-medium">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              Chat da Comunidade (Tempo Real)
+            </span>
+            <span id="chat-room-status" class="text-gray-500 font-mono text-[10px]">Conectado</span>
+          </div>
+
+          <!-- Mensagens Reais -->
+          <div id="chat-messages-container" class="flex-1 overflow-y-auto p-3.5 space-y-3">
+            <!-- Mensagens enviadas por usuários reais aparecem aqui -->
+          </div>
+
+          <!-- Input do Chat -->
+          <form onsubmit="handleSendChat(event)" class="p-3 bg-[#160f24] border-t border-vice-border">
+            <div class="flex items-center gap-2">
+              <input 
+                type="text" 
+                id="chat-input" 
+                maxlength="180"
+                placeholder="Escreva uma mensagem no chat..." 
+                class="flex-1 bg-vice-panel border border-vice-border focus:border-vice-pink rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-gray-500 outline-none transition"
+              />
+              <button type="submit" class="p-2.5 rounded-xl bg-gradient-to-r from-vice-pink to-purple-600 hover:opacity-90 text-white transition shrink-0">
+                <i data-lucide="send" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <div class="flex items-center justify-between mt-1.5 text-[10px] text-gray-500 px-1">
+              <span id="chat-helper-text">Apenas usuários logados podem enviar mensagens.</span>
+              <span>Cooldown: 3s</span>
+            </div>
+          </form>
+        </div>
+
+        <!-- CONTEÚDO DA ABA 3: REGRAS DA SESSÃO -->
+        <div id="tab-content-rules" class="hidden flex-1 overflow-y-auto p-4 space-y-3 text-xs text-gray-300">
+          <div class="p-3.5 rounded-xl bg-vice-panel/70 border border-vice-border space-y-1.5">
+            <div class="font-bold text-white flex items-center gap-1.5">
+              <span class="text-vice-pink">01.</span> Turnos de 10 Minutos
+            </div>
+            <p class="text-gray-400 leading-relaxed">Cada jogador tem exatamente 10:00 minutos no controle remoto. Ao zerar o relógio, a sessão passa automaticamente para o #1 da fila.</p>
+          </div>
+          <div class="p-3.5 rounded-xl bg-vice-panel/70 border border-vice-border space-y-1.5">
+            <div class="font-bold text-white flex items-center gap-1.5">
+              <span class="text-vice-cyan">02.</span> Fila Persistente Global
+            </div>
+            <p class="text-gray-400 leading-relaxed">Sua posição fica salva na sua conta e sincronizada com o cluster. Atualizar a página não faz você perder seu lugar.</p>
+          </div>
+          <div class="p-3.5 rounded-xl bg-vice-panel/70 border border-vice-border space-y-1.5">
+            <div class="font-bold text-white flex items-center gap-1.5">
+              <span class="text-vice-yellow">03.</span> Confirmação em 30 Segundos
+            </div>
+            <p class="text-gray-400 leading-relaxed">Quando chegar sua vez, você tem 30 segundos para clicar em "Entrar no Jogo Agora" antes que a vaga passe para o próximo.</p>
+          </div>
+          <div class="p-3.5 rounded-xl bg-vice-panel/70 border border-vice-border space-y-1.5">
+            <div class="font-bold text-white flex items-center gap-1.5">
+              <span class="text-emerald-400">04.</span> Conduta no Chat e Jogo
+            </div>
+            <p class="text-gray-400 leading-relaxed">Respeite os membros da comunidade no chat. Flood, links maliciosos ou desrespeito resultam em bloqueio do perfil.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEÇÃO INFERIOR: COMUNIDADE JOGARGTA (HALL DA FAMA + ÚLTIMOS ACONTECIMENTOS) -->
+    <section id="comunidade" class="pt-4 space-y-6">
+      <div>
+        <h2 class="text-xl sm:text-2xl font-black tracking-tight text-white uppercase">Comunidade JogarGTA</h2>
+        <p class="text-xs sm:text-sm text-gray-400">Os melhores jogadores do ranking e o que rolou nos últimos turnos.</p>
+      </div>
+
+      <div id="hall" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- HALL DA FAMA (7 cols - Idêntico à Imagem 1) -->
+        <div class="lg:col-span-7 space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <i data-lucide="crown" class="w-4 h-4 text-vice-yellow"></i>
+                Hall da fama
+              </h3>
+              <p class="text-[11px] text-gray-400">Ranking por likes da comunidade, conquistas e horas no controle.</p>
+            </div>
+          </div>
+
+          <!-- Pódio Top 3 -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5" id="hall-top3-container">
+            <!-- Renderizado via JS -->
+          </div>
+
+          <!-- Lista #04 até #10 -->
+          <div class="space-y-2" id="hall-list-container">
+            <!-- Renderizado via JS -->
+          </div>
+
+          <p class="text-[11px] text-gray-500 pt-1">
+            Fama = (likes − dislikes) × 10 + 25 por conquista + 5 por hora jogada
+          </p>
+        </div>
+
+        <!-- ÚLTIMOS ACONTECIMENTOS (5 cols - Idêntico à Imagem 1) -->
+        <div class="lg:col-span-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <i data-lucide="history" class="w-4 h-4 text-vice-cyan"></i>
+              Últimos acontecimentos
+            </h3>
+            <span class="text-[11px] text-gray-500">Feed ao vivo</span>
+          </div>
+
+          <div id="events-feed-container" class="space-y-2.5">
+            <!-- Eventos reais + histórico de trocas de turno -->
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="mt-12 border-t border-vice-border bg-[#130c20] py-6 px-4 text-xs text-gray-500">
+    <div class="max-w-[1440px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-2">
+        <span class="font-bold text-gray-300">Jogar GTA VI</span>
+        <span>•</span>
+        <span>Comunidade Brasileira de Cloud Gaming</span>
+      </div>
+      <div>
+        <span>Sincronização Global UTC • Todos os direitos reservados aos seus respectivos criadores.</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- MODAL DE CONTA (CRIAR CONTA / EDITAR PERFIL) -->
+  <div id="auth-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-vice-card border border-vice-border rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 relative">
+      <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white p-1">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div>
+        <span class="text-[11px] font-bold uppercase tracking-wider text-vice-pink">Perfil da Comunidade</span>
+        <h3 id="auth-modal-title" class="text-xl font-black text-white mt-0.5">Entrar / Criar Conta</h3>
+        <p class="text-xs text-gray-400 mt-1">Seu perfil fica salvo para manter sua posição na fila e participar do chat.</p>
+      </div>
+
+      <form onsubmit="saveUserProfile(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-300 mb-1.5">Seu Nickname</label>
+          <input 
+            type="text" 
+            id="profile-nick-input" 
+            required 
+            minlength="3" 
+            maxlength="20"
+            placeholder="Ex: RaioZ_BR" 
+            class="w-full bg-vice-panel border border-vice-border focus:border-vice-pink rounded-xl px-4 py-2.5 text-sm text-white outline-none"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-gray-300 mb-1.5">Escolha um Avatar</label>
+          <div class="grid grid-cols-6 gap-2" id="avatar-presets-grid">
+            <!-- Presets gerados via JS -->
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-gray-300 mb-1.5">Cor do Nick no Chat</label>
+          <div class="flex items-center gap-2.5" id="nick-colors-grid">
+            <!-- Cores geradas via JS -->
+          </div>
+        </div>
+
+        <div class="pt-2 flex items-center justify-end gap-2">
+          <button type="button" id="btn-logout-profile" onclick="logoutUser()" class="hidden mr-auto px-3.5 py-2 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10 transition">
+            Sair da conta
+          </button>
+          <button type="button" onclick="closeAuthModal()" class="px-4 py-2.5 rounded-xl bg-vice-panel text-xs font-bold text-gray-300 hover:text-white transition">
+            Cancelar
+          </button>
+          <button type="submit" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-vice-pink to-purple-600 text-xs font-extrabold text-white shadow-lg hover:opacity-95 transition">
+            Salvar Perfil
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- OVERLAY DE "SUA VEZ!" E CONEXÃO REALISTA -->
+  <div id="your-turn-overlay" class="hidden fixed inset-0 z-50 bg-[#0d0817]/95 backdrop-blur-md flex items-center justify-center p-4">
+    <div id="your-turn-card" class="max-w-lg w-full bg-vice-card border-2 border-vice-pink rounded-3xl p-7 sm:p-8 text-center shadow-2xl vice-glow-pink space-y-6 relative overflow-hidden">
+      <div class="absolute -top-20 left-1/2 -translate-x-1/2 w-80 h-40 bg-vice-pink/25 blur-3xl pointer-events-none"></div>
+
+      <!-- Estado 1: Aviso de Sua Vez -->
+      <div id="turn-ready-state" class="space-y-5 relative z-10">
+        <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-xs font-extrabold uppercase tracking-wider">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          Console PS5-BR04 Liberado
+        </div>
+
+        <div>
+          <h2 class="text-4xl sm:text-5xl font-black tracking-tight vice-gradient-text uppercase">
+            SUA VEZ!
+          </h2>
+          <p class="text-sm text-gray-300 mt-2">
+            Sua sessão de <strong class="text-white">10:00 minutos</strong> em GTA VI está pronta. Confirme antes que o tempo expire.
+          </p>
+        </div>
+
+        <div class="bg-vice-panel/90 border border-vice-border rounded-2xl p-4 flex items-center justify-between text-xs">
+          <div class="text-left">
+            <div class="text-gray-400">Jogador</div>
+            <div id="turn-modal-username" class="font-bold text-white text-sm">---</div>
+          </div>
+          <div class="text-center">
+            <div class="text-gray-400">Servidor</div>
+            <div class="font-mono font-bold text-vice-cyan">BR-SP #04</div>
+          </div>
+          <div class="text-right">
+            <div class="text-gray-400">Expira em</div>
+            <div id="turn-accept-countdown" class="font-mono font-black text-lg text-vice-yellow">30s</div>
+          </div>
+        </div>
+
+        <button onclick="enterGameNow()" class="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-vice-pink via-rose-500 to-amber-500 hover:brightness-110 text-white font-black text-base sm:text-lg tracking-wide uppercase shadow-xl transition transform active:scale-[0.99] cursor-pointer">
+          ENTRAR NO JOGO AGORA
+        </button>
+
+        <button onclick="cancelTurnAndLeave()" class="text-xs text-gray-500 hover:text-gray-300 transition">
+          Desistir da vez e voltar para o início
+        </button>
+      </div>
+
+      <!-- Estado 2: Conectando ao Console Remoto antes de recarregar -->
+      <div id="turn-connecting-state" class="hidden space-y-6 py-4 relative z-10">
+        <div class="w-16 h-16 mx-auto rounded-2xl bg-vice-panel border border-vice-cyan/40 flex items-center justify-center">
+          <div class="w-8 h-8 border-4 border-vice-cyan border-t-transparent rounded-full animate-spin"></div>
+        </div>
+
+        <div class="space-y-2">
+          <h3 class="text-xl font-black text-white">Alocando Controle Virtual...</h3>
+          <p id="connecting-step-text" class="text-xs font-mono text-vice-cyan">
+            Estabelecendo túnel WebRTC com PS5-BR04...
+          </p>
+        </div>
+
+        <div class="w-full bg-vice-bg h-2.5 rounded-full overflow-hidden border border-vice-border">
+          <div id="connecting-progress-bar" class="h-full bg-gradient-to-r from-vice-cyan to-vice-pink transition-all duration-300" style="width: 15%"></div>
+        </div>
+
+        <div class="text-[11px] text-gray-400 font-mono">
+          Não feche esta janela durante a sincronização do controle.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST DE NOTIFICAÇÃO -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <script>
+    // =========================================================================
+    // 1. LISTA FIXA DE 242 NICKS BRASILEIROS REALISTAS (BASE DETERMINÍSTICA)
+    // =========================================================================
+    const BASE_242_PLAYERS = [
+      "Anakin", "Raio Z YT", "Jonaszz", "Bingas Bongas", "Luan carniviro",
+      "Luan Gomes", "Aline Cristina Santos", "Matheus Phenton", "baguncinha", "Thiago",
+      "s4mple-", "NeewTM Sampaio", "Lorrane Assis", "Tatiane Santos da silva", "Rafael",
+      "Mfsk", "Hyandro", "Pedro Daer", "PABLOMAFIAGAMER", "Artur",
+      "Jv", "Rafael Dias", "Jamaica_pjl", "Precinho Tech", "Kauan_zx",
+      "Lucas Ferreira", "Gabriel_rj", "Natanzinho011", "VitinhoPlay", "Caio Cesar",
+      "Dudu_Mendes", "gui_santos99", "Igor_Souza", "Pedro Henrique", "Felipe_GamerBR",
+      "biel_021", "thzin_ff", "Matheus_Oliveira", "Ruan_Carlos", "Joao_Vitor07",
+      "enzo_gabriel", "Gustavo_LimaBR", "Vitor_Hugo", "kaua_silva", "Luanzin_xp",
+      "arthur_morgan_br", "TommyVercetti_SP", "Lucia_Leonida", "Jason_DuvalBR", "ViceCity_King",
+      "guilherme_alves", "daniel_costa", "bruno_henrique", "rodrigo_melo", "marcos_vinicius",
+      "leandro_silva", "anderson_santos", "fabio_junior", "ricardo_almeida", "eduardo_pereira",
+      "alexandre_lima", "fernando_rocha", "diego_martins", "renato_gomes", "wagner_souza",
+      "camila_rodrigues", "amanda_oliveira", "juliana_santos", "larissa_costa", "beatriz_alves",
+      "mariana_lima", "leticia_ferreira", "gabriela_souza", "fernanda_silva", "patricia_gomes",
+      "luiza_martins", "isabela_rocha", "yasmin_pereira", "manuela_dias", "sophia_ribeiro",
+      "xX_Darkness_Xx", "Kira_BR", "zika_do_pantano", "Mestre_Yoda", "Sombra_Noturna",
+      "Lobo_Guara", "Falcao_Negro", "Tigre_de_Bengala", "Dragao_Dourado", "Fenix_Azul",
+      "Cachorro_Louco", "Gato_de_Botas", "Pato_Donald_BR", "Ze_Pequeno", "Chico_Bento",
+      "Tiao_Carreiro", "Juca_Bala", "Beto_Carreiro", "Zeca_Pagodinho", "Seu_Madruga",
+      "Chaves_del8", "Kiko_Tesouro", "Nhonho_BR", "Girafales", "Bruxa_do_71",
+      "pedrin_do_grau", "lucas_grau244", "renan_244", "menor_tody", "cria_do_rj",
+      "mlk_p激ranha", "patrao_013", "chefe_085", "coringa_louco", "arlequina_sp",
+      "thug_life_br", "gangster_vice", "mafia_azul", "comando_vermelho", "tropa_do_urso",
+      "bope_rj", "rota_sp", "caveira_01", "sargento_fahur", "capitao_nascimento",
+      "neymar_jr10", "vini_jr7", "rodrygo_goes", "endrick_9", "paqueta_10",
+      "richarlison_9", "casemiro_5", "alisson_1", "marquinhos_4", "thiago_silva3",
+      "gabigol_10", "arrascaeta_14", "pedro_9", "bruno_henrique27", "everton_ribeiro",
+      "veiga_23", "dudu_7", "rony_10", "gomez_15", "weverton_21",
+      "calleri_9", "luciano_10", "lucas_moura7", "arboleda_5", "rafael_1",
+      "cassio_12", "fagner_23", "yuri_alberto9", "romero_11", "garro_10",
+      "hulk_7", "paulinho_10", "scarpa_6", "arana_13", "everson_22",
+      "suarez_9", "geromel_3", "kannemann_4", "cristaldo_10", "marchesin_1",
+      "alan_patrick10", "valencia_13", "wanderson_11", "rochet_1", "mercado_25",
+      "cano_14", "arias_21", "ganso_10", "kennedy_9", "fabio_1",
+      "tiquinho_9", "junior_santos11", "eduardo_33", "gatito_1", "marcal_21",
+      "vegetti_99", "payet_10", "piton_6", "leo_jardim1", "medel_17",
+      "alanzoka_fan", "gaules_tribo", "loud_coringa", "nobru_apelao", "cerol_zero",
+      "piuzinho_br", "el_gato", "fluxo_babi", "voltan_loud", "thurzin_loud",
+      "bak_loud", "lzinn_xl", "two9_ff", "dacruz_ff", "marechal_ff",
+      "fallen_cs", "coldzera_cs", "fer_cs", "fnx_ntc", "taco_cs",
+      "kscerato", "yuurih", "chelo_cs", "art_cs", "drop_cs",
+      "aspas_vlr", "less_vlr", "saadhak", "cauanzin", "tuyz_vlr",
+      "sacy_vlr", "pancada_vlr", "mwzera", "heat_vlr", "khalil_vlr",
+      "brtt_rx", "kami_pain", "tinowns", "robo_lol", "titan_lol",
+      "dyNquedo", "cariok", "titaN_red", "guigo_lol", "aegis_lol",
+      "joaozinho_play", "pedro_gamer"
+    ];
+
+    // Garante exatamente 242 itens únicos na base
+    while (BASE_242_PLAYERS.length < 242) {
+      BASE_242_PLAYERS.push(`PlayerBR_${BASE_242_PLAYERS.length + 1}`);
+    }
+    const FIXED_QUEUE_242 = BASE_242_PLAYERS.slice(0, 242);
+
+    // =========================================================================
+    // 2. CONFIGURAÇÃO DE SINCRONIZAÇÃO GLOBAL (UTC DETERMINÍSTICO + MQTT + BC)
+    // =========================================================================
+    const TURN_DURATION_MS = 10 * 60 * 1000; // 10 minutos exatos (600.000 ms)
+    const SESSION_EPOCH_UTC = Date.UTC(2025, 0, 1, 0, 0, 0); // Marco zero global fixo
+
+    // Tópico MQTT público único para sincronizar usuários reais em tempo real no GitHub Pages
+    const MQTT_BROKER = 'wss://broker.emqx.io:8084/mqtt';
+    const MQTT_TOPIC_PREFIX = 'jogargta6_vicecity_cluster_br04_v1';
+    const TOPIC_PRESENCE = `${MQTT_TOPIC_PREFIX}/presence`;
+    const TOPIC_CHAT = `${MQTT_TOPIC_PREFIX}/chat`;
+    const TOPIC_EVENTS = `${MQTT_TOPIC_PREFIX}/events`;
+
+    // Canal entre abas do mesmo navegador
+    const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('jogargta6_sync') : null;
+
+    // Estado da Aplicação
+    let clientId = localStorage.getItem('jgta_client_id');
+    if (!clientId) {
+      clientId = 'usr_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+      localStorage.setItem('jgta_client_id', clientId);
+    }
+
+    let currentUser = JSON.parse(localStorage.getItem('jgta_user_profile') || 'null');
+    let myQueueEntry = JSON.parse(localStorage.getItem('jgta_my_queue_entry') || 'null');
+    // myQueueEntry = { clientId, nick, avatar, color, joinedAtSlot, joinedAtTs, customOffsetPos }
+
+    // Mapa de outros usuários reais ativos na fila (recebidos via MQTT / BroadcastChannel)
+    let realUsersInQueue = {}; // { [clientId]: { clientId, nick, avatar, color, joinedAtTs, lastSeen } }
+    let onlinePeers = {}; // { [clientId]: lastSeenTs }
+    let chatMessages = JSON.parse(localStorage.getItem('jgta_chat_history') || '[]');
+    let recentEvents = JSON.parse(localStorage.getItem('jgta_events_history') || '[]');
+
+    let activeRightTab = 'queue';
+    let lastChatSentTs = 0;
+    let soundNotifyEnabled = true;
+    let turnCountdownInterval = null;
+    let turnSecondsLeft = 30;
+    let isYourTurnModalOpen = false;
+    let isConnecting = false;
+    let mqttClient = null;
+    let lastRenderedSlot = -1;
+    let votedSlots = JSON.parse(localStorage.getItem('jgta_voted_slots') || '{}');
+
+    // Avatares e Cores disponíveis para conta
+    const AVATAR_PRESETS = ['🌴', '🕶️', '🏎️', '🦩', '💎', '🔥', '🎮', '👑', '🦈', '⚡', '🌆', '💵'];
+    const NICK_COLORS = ['#ff2a85', '#00f0ff', '#ffd000', '#22c55e', '#a855f7', '#fb923c', '#f43f5e', '#38bdf8'];
+    let selectedAvatar = AVATAR_PRESETS[0];
+    let selectedColor = NICK_COLORS[0];
+
+    // =========================================================================
+    // 3. CÁLCULO DETERMINÍSTICO DA FILA GLOBAL (242 FIXOS + USUÁRIOS REAIS)
+    // =========================================================================
+    function getGlobalTimeState() {
+      const now = Date.now();
+      const elapsedSinceEpoch = Math.max(0, now - SESSION_EPOCH_UTC);
+      const currentSlot = Math.floor(elapsedSinceEpoch / TURN_DURATION_MS);
+      const elapsedInCurrentTurn = elapsedSinceEpoch % TURN_DURATION_MS;
+      const remainingMs = TURN_DURATION_MS - elapsedInCurrentTurn;
+
+      // Jogador base atual na posição 0 do ciclo de 242
+      const baseIndex = currentSlot % FIXED_QUEUE_242.length;
+      const currentPlayingNick = FIXED_QUEUE_242[baseIndex];
+
+      // Monta a fila base rotacionada de 242 pessoas (os próximos 242 na fila)
+      const rotatedBaseQueue = [];
+      for (let i = 1; i <= FIXED_QUEUE_242.length; i++) {
+        const idx = (baseIndex + i) % FIXED_QUEUE_242.length;
+        rotatedBaseQueue.push({
+          nick: FIXED_QUEUE_242[idx],
+          isRealUser: false,
+          isMe: false,
+          avatar: FIXED_QUEUE_242[idx].charAt(0).toUpperCase(),
+          color: '#9ca3af'
+        });
+      }
+
+      // Limpa usuários reais inativos há mais de 35 segundos (exceto o próprio usuário)
+      const activeRealList = [];
+      Object.values(realUsersInQueue).forEach(u => {
+        if (u.clientId === clientId) return;
+        if (now - u.lastSeen < 35000) {
+          activeRealList.push(u);
+        } else {
+          delete realUsersInQueue[u.clientId];
+        }
+      });
+
+      // Inclui o próprio usuário se estiver na fila
+      if (myQueueEntry) {
+        activeRealList.push({
+          ...myQueueEntry,
+          isMe: true
+        });
+      }
+
+      // Ordena os usuários reais por ordem de entrada (joinedAtTs)
+      activeRealList.sort((a, b) => a.joinedAtTs - b.joinedAtTs);
+
+      // Constrói a fila completa: 242 fixos + usuários reais no final (posições 243, 244...)
+      // Se o usuário ativou o modo de avançar para testar "Sua vez!", coloca ele na posição #1
+      const fullQueue = [...rotatedBaseQueue];
+      activeRealList.forEach(realUser => {
+        const item = {
+          nick: realUser.nick,
+          isRealUser: true,
+          isMe: realUser.clientId === clientId,
+          clientId: realUser.clientId,
+          avatar: realUser.avatar || realUser.nick.charAt(0).toUpperCase(),
+          color: realUser.color || '#ff2a85'
+        };
+        if (realUser.forceNextTurn) {
+          fullQueue.unshift(item);
+        } else {
+          fullQueue.push(item);
+        }
+      });
+
+      // Descobre a posição atual do usuário logado (1-based)
+      let myPosition = -1;
+      if (myQueueEntry) {
+        const idx = fullQueue.findIndex(item => item.isMe);
+        if (idx !== -1) {
+          myPosition = idx + 1;
+        }
+      }
+
+      return {
+        now,
+        currentSlot,
+        remainingMs,
+        currentPlayingNick,
+        fullQueue,
+        totalInQueue: fullQueue.length, // 242 se ninguém real entrou; 243 se 1 real entrou!
+        myPosition
+      };
+    }
+
+    function formatMMSS(ms) {
+      const totalSec = Math.max(0, Math.ceil(ms / 1000));
+      const mins = Math.floor(totalSec / 60);
+      const secs = totalSec % 60;
+      return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function formatEstimatedWait(position) {
+      if (position <= 0) return '—';
+      const totalMinutes = position * 10;
+      const days = Math.floor(totalMinutes / (60 * 24));
+      const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+      const mins = totalMinutes % 60;
+      if (days > 0) return `~${days}d ${hours}h ${mins}m`;
+      if (hours > 0) return `~${hours}h ${mins}m`;
+      return `~${mins} min`;
+    }
+
+    // =========================================================================
+    // 4. SINCRONIZAÇÃO EM TEMPO REAL (MQTT WEBSOCKET + BROADCASTCHANNEL)
+    // =========================================================================
+    function initRealtimeSync() {
+      // Escuta outras abas no mesmo navegador
+      if (bc) {
+        bc.onmessage = (event) => {
+          handleIncomingSyncMessage(event.data);
+        };
+      }
+
+      // Conecta ao broker MQTT público via WebSocket para sincronizar entre TODOS os visitantes do site
+      try {
+        if (typeof mqtt !== 'undefined') {
+          mqttClient = mqtt.connect(MQTT_BROKER, {
+            clientId: 'jgta6_' + clientId + '_' + Math.floor(Math.random() * 1000),
+            clean: true,
+            reconnectPeriod: 4000
+          });
+
+          mqttClient.on('connect', () => {
+            const syncEl = document.getElementById('header-sync-status');
+            if (syncEl) syncEl.textContent = 'GLOBAL SYNC';
+            const chatStatus = document.getElementById('chat-room-status');
+            if (chatStatus) chatStatus.textContent = 'Ao vivo • P2P/WS';
+
+            mqttClient.subscribe([TOPIC_PRESENCE, TOPIC_CHAT, TOPIC_EVENTS]);
+            broadcastPresence();
+          });
+
+          mqttClient.on('message', (topic, payload) => {
+            try {
+              const data = JSON.parse(payload.toString());
+              handleIncomingSyncMessage(data);
+            } catch (e) {
+              // Ignora pacotes inválidos
+            }
+          });
+
+          mqttClient.on('offline', () => {
+            const syncEl = document.getElementById('header-sync-status');
+            if (syncEl) syncEl.textContent = 'SYNC UTC';
+          });
+        }
+      } catch (err) {
+        console.warn('Fallback local ativo:', err);
+      }
+
+      // Envia heartbeat de presença a cada 6 segundos para manter o contador 242 -> 243 sincronizado
+      setInterval(() => {
+        broadcastPresence();
+      }, 6000);
+    }
+
+    function publishSync(topic, data) {
+      const packet = { ...data, senderId: clientId, ts: Date.now() };
+      if (bc) {
+        bc.postMessage(packet);
+      }
+      if (mqttClient && mqttClient.connected) {
+        mqttClient.publish(topic, JSON.stringify(packet));
+      }
+    }
+
+    function broadcastPresence() {
+      onlinePeers[clientId] = Date.now();
+      publishSync(TOPIC_PRESENCE, {
+        type: 'presence',
+        inQueue: Boolean(myQueueEntry),
+        queueEntry: myQueueEntry ? {
+          clientId: myQueueEntry.clientId,
+          nick: myQueueEntry.nick,
+          avatar: myQueueEntry.avatar,
+          color: myQueueEntry.color,
+          joinedAtTs: myQueueEntry.joinedAtTs,
+          forceNextTurn: Boolean(myQueueEntry.forceNextTurn)
+        } : null
+      });
+    }
+
+    function handleIncomingSyncMessage(data) {
+      if (!data || data.senderId === clientId) return;
+
+      if (data.type === 'presence') {
+        onlinePeers[data.senderId] = Date.now();
+        if (data.inQueue && data.queueEntry) {
+          realUsersInQueue[data.senderId] = {
+            ...data.queueEntry,
+            lastSeen: Date.now()
+          };
+        } else {
+          delete realUsersInQueue[data.senderId];
+        }
+        updateUI();
+      } else if (data.type === 'chat') {
+        addChatMessageToUI(data.message, false);
+      } else if (data.type === 'event') {
+        addEventToFeed(data.text, data.dotColor, false);
+      }
+    }
+
+    // =========================================================================
+    // 5. CONTROLE DA FILA DO USUÁRIO & MECÂNICA "SUA VEZ!"
+    // =========================================================================
+    function joinQueue() {
+      if (!currentUser) {
+        openAuthModal(true);
+        return;
+      }
+      if (myQueueEntry) return;
+
+      const state = getGlobalTimeState();
+      myQueueEntry = {
+        clientId: clientId,
+        nick: currentUser.nick,
+        avatar: currentUser.avatar,
+        color: currentUser.color,
+        joinedAtSlot: state.currentSlot,
+        joinedAtTs: Date.now(),
+        forceNextTurn: false
+      };
+
+      localStorage.setItem('jgta_my_queue_entry', JSON.stringify(myQueueEntry));
+      broadcastPresence();
+      addEventToFeed(`${currentUser.nick} entrou na fila da sessão (#${state.totalInQueue + 1})`, 'cyan', true);
+      showToast(`Você entrou na fila! Posição #${state.totalInQueue + 1}`, 'success');
+      updateUI();
+    }
+
+    function leaveQueue(silent = false) {
+      if (!myQueueEntry) return;
+      const nick = myQueueEntry.nick;
+      myQueueEntry = null;
+      localStorage.removeItem('jgta_my_queue_entry');
+      broadcastPresence();
+      if (!silent) {
+        addEventToFeed(`${nick} saiu da fila`, 'pink', true);
+        showToast('Você saiu da fila.', 'info');
+      }
+      updateUI();
+    }
+
+    // Simula a chegada imediata da vez do usuário para testar ou quando o turno dele vira
+    function triggerYourTurn() {
+      if (isYourTurnModalOpen || isConnecting) return;
+      isYourTurnModalOpen = true;
+      turnSecondsLeft = 30;
+
+      const overlay = document.getElementById('your-turn-overlay');
+      const readyState = document.getElementById('turn-ready-state');
+      const connState = document.getElementById('turn-connecting-state');
+      const userEl = document.getElementById('turn-modal-username');
+      const countEl = document.getElementById('turn-accept-countdown');
+
+      userEl.textContent = currentUser ? currentUser.nick : (myQueueEntry ? myQueueEntry.nick : 'Jogador');
+      countEl.textContent = `${turnSecondsLeft}s`;
+
+      readyState.classList.remove('hidden');
+      connState.classList.add('hidden');
+      overlay.classList.remove('hidden');
+
+      playBeepAlert();
+
+      clearInterval(turnCountdownInterval);
+      turnCountdownInterval = setInterval(() => {
+        turnSecondsLeft--;
+        countEl.textContent = `${turnSecondsLeft}s`;
+        if (turnSecondsLeft <= 0) {
+          clearInterval(turnCountdownInterval);
+          // Tempo esgotado: remove da fila e fecha
+          leaveQueue(true);
+          overlay.classList.add('hidden');
+          isYourTurnModalOpen = false;
+          showToast('Tempo de confirmação expirado. Sua vaga foi passada adiante.', 'error');
+        }
+      }, 1000);
+    }
+
+    // Ao clicar em "ENTRAR NO JOGO AGORA": finge conexão real e recarrega o site saindo da fila
+    function enterGameNow() {
+      if (isConnecting) return;
+      isConnecting = true;
+      clearInterval(turnCountdownInterval);
+
+      const readyState = document.getElementById('turn-ready-state');
+      const connState = document.getElementById('turn-connecting-state');
+      const stepText = document.getElementById('connecting-step-text');
+      const progressBar = document.getElementById('connecting-progress-bar');
+
+      readyState.classList.add('hidden');
+      connState.classList.remove('hidden');
+
+      // Remove a vaga da fila no localStorage antes de recarregar
+      localStorage.removeItem('jgta_my_queue_entry');
+      myQueueEntry = null;
+      broadcastPresence();
+
+      const steps = [
+        { pct: '28%', text: 'Autenticando token de sessão no nó PS5-BR04...' },
+        { pct: '56%', text: 'Sincronizando controle DualSense Virtual (60Hz)...' },
+        { pct: '84%', text: 'Carregando instância Vice City • Leonida...' },
+        { pct: '100%', text: 'Redirecionando stream de vídeo dedicado...' }
+      ];
+
+      let stepIdx = 0;
+      const stepTimer = setInterval(() => {
+        if (stepIdx < steps.length) {
+          progressBar.style.width = steps[stepIdx].pct;
+          stepText.textContent = steps[stepIdx].text;
+          stepIdx++;
+        } else {
+          clearInterval(stepTimer);
+          // Recarrega a página limpando a vaga da fila exatamente como solicitado
+          window.location.reload();
+        }
+      }, 650);
+    }
+
+    function cancelTurnAndLeave() {
+      clearInterval(turnCountdownInterval);
+      isYourTurnModalOpen = false;
+      document.getElementById('your-turn-overlay').classList.add('hidden');
+      leaveQueue(false);
+    }
+
+    // Atalho discreto para o usuário testar a tela de "Sua vez!" sem precisar esperar 40 horas
+    function simulateMyTurnNow() {
+      if (!myQueueEntry) return;
+      myQueueEntry.forceNextTurn = true;
+      localStorage.setItem('jgta_my_queue_entry', JSON.stringify(myQueueEntry));
+      broadcastPresence();
+      updateUI();
+      setTimeout(() => {
+        triggerYourTurn();
+      }, 350);
+    }
+
+    function playBeepAlert() {
+      if (!soundNotifyEnabled) return;
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.14); // A5
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.45);
+      } catch (e) {}
+    }
+
+    // =========================================================================
+    // 6. SISTEMA DE CONTAS (LOGIN / CADASTRO / EDITAR PERFIL)
+    // =========================================================================
+    function renderHeaderUserArea() {
+      const container = document.getElementById('user-header-area');
+      if (currentUser) {
+        container.innerHTML = `
+          <button onclick="openAuthModal(false)" class="flex items-center gap-2.5 pl-2 pr-3 py-1.5 rounded-xl bg-vice-panel hover:bg-[#2a1d42] border border-vice-border transition text-left">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center text-base font-bold bg-vice-bg border border-white/10" style="color: ${currentUser.color}">
+              ${currentUser.avatar}
+            </div>
+            <div class="leading-tight">
+              <div class="text-xs font-extrabold text-white max-w-[110px] truncate">${escapeHTML(currentUser.nick)}</div>
+              <div class="text-[10px] text-gray-400 flex items-center gap-1">
+                <span>Editar perfil</span>
+              </div>
+            </div>
+          </button>
+        `;
+      } else {
+        container.innerHTML = `
+          <button onclick="openAuthModal(false)" class="px-4 py-2 rounded-xl bg-gradient-to-r from-vice-pink to-purple-600 hover:opacity-95 text-xs font-extrabold text-white shadow-lg flex items-center gap-2 transition">
+            <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+            <span>Criar Conta / Entrar</span>
+          </button>
+        `;
+      }
+      lucide.createIcons();
+    }
+
+    function openAuthModal(autoJoinAfter = false) {
+      const modal = document.getElementById('auth-modal');
+      modal.dataset.autoJoin = autoJoinAfter ? '1' : '0';
+
+      const title = document.getElementById('auth-modal-title');
+      const nickInput = document.getElementById('profile-nick-input');
+      const logoutBtn = document.getElementById('btn-logout-profile');
+
+      if (currentUser) {
+        title.textContent = 'Editar Perfil';
+        nickInput.value = currentUser.nick;
+        selectedAvatar = currentUser.avatar;
+        selectedColor = currentUser.color;
+        logoutBtn.classList.remove('hidden');
+      } else {
+        title.textContent = 'Criar Conta na Comunidade';
+        nickInput.value = '';
+        selectedAvatar = AVATAR_PRESETS[Math.floor(Math.random() * AVATAR_PRESETS.length)];
+        selectedColor = NICK_COLORS[Math.floor(Math.random() * NICK_COLORS.length)];
+        logoutBtn.classList.add('hidden');
+      }
+
+      renderAvatarAndColorPickers();
+      modal.classList.remove('hidden');
+      setTimeout(() => nickInput.focus(), 50);
+    }
+
+    function closeAuthModal() {
+      document.getElementById('auth-modal').classList.add('hidden');
+    }
+
+    function renderAvatarAndColorPickers() {
+      const avatarGrid = document.getElementById('avatar-presets-grid');
+      avatarGrid.innerHTML = AVATAR_PRESETS.map(av => `
+        <button type="button" onclick="selectAvatar('${av}')" class="h-10 rounded-xl flex items-center justify-center text-lg border transition ${selectedAvatar === av ? 'bg-vice-pink/20 border-vice-pink scale-105' : 'bg-vice-panel border-vice-border hover:border-gray-500'}">
+          ${av}
+        </button>
+      `).join('');
+
+      const colorGrid = document.getElementById('nick-colors-grid');
+      colorGrid.innerHTML = NICK_COLORS.map(col => `
+        <button type="button" onclick="selectColor('${col}')" class="w-7 h-7 rounded-full border-2 transition ${selectedColor === col ? 'border-white scale-110' : 'border-transparent opacity-75 hover:opacity-100'}" style="background-color: ${col}"></button>
+      `).join('');
+    }
+
+    function selectAvatar(av) {
+      selectedAvatar = av;
+      renderAvatarAndColorPickers();
+    }
+
+    function selectColor(col) {
+      selectedColor = col;
+      renderAvatarAndColorPickers();
+    }
+
+    function saveUserProfile(e) {
+      e.preventDefault();
+      const rawNick = document.getElementById('profile-nick-input').value.trim();
+      if (rawNick.length < 3) return;
+
+      const isNew = !currentUser;
+      currentUser = {
+        nick: rawNick,
+        avatar: selectedAvatar,
+        color: selectedColor
+      };
+      localStorage.setItem('jgta_user_profile', JSON.stringify(currentUser));
+
+      // Atualiza também se já estiver na fila
+      if (myQueueEntry) {
+        myQueueEntry.nick = currentUser.nick;
+        myQueueEntry.avatar = currentUser.avatar;
+        myQueueEntry.color = currentUser.color;
+        localStorage.setItem('jgta_my_queue_entry', JSON.stringify(myQueueEntry));
+        broadcastPresence();
+      }
+
+      const shouldAutoJoin = document.getElementById('auth-modal').dataset.autoJoin === '1';
+      closeAuthModal();
+      renderHeaderUserArea();
+      updateChatInputState();
+      updateUI();
+
+      if (isNew) {
+        showToast(`Bem-vindo(a), ${currentUser.nick}!`, 'success');
+      } else {
+        showToast('Perfil atualizado!', 'success');
+      }
+
+      if (shouldAutoJoin && !myQueueEntry) {
+        joinQueue();
+      }
+    }
+
+    function logoutUser() {
+      leaveQueue(true);
+      currentUser = null;
+      localStorage.removeItem('jgta_user_profile');
+      closeAuthModal();
+      renderHeaderUserArea();
+      updateChatInputState();
+      updateUI();
+      showToast('Você saiu da sua conta.', 'info');
+    }
+
+    // =========================================================================
+    // 7. CHAT AO VIVO REAL (ZERO BOTS! APENAS MENSAGENS REAIS)
+    // =========================================================================
+    function updateChatInputState() {
+      const input = document.getElementById('chat-input');
+      const helper = document.getElementById('chat-helper-text');
+      if (currentUser) {
+        input.placeholder = `Conversar como ${currentUser.nick}...`;
+        helper.textContent = `Logado como ${currentUser.nick}`;
+      } else {
+        input.placeholder = 'Crie uma conta para falar no chat...';
+        helper.textContent = 'Clique em "Criar Conta / Entrar" no topo para comentar.';
+      }
+    }
+
+    function handleSendChat(e) {
+      e.preventDefault();
+      if (!currentUser) {
+        openAuthModal(false);
+        return;
+      }
+
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const now = Date.now();
+      if (now - lastChatSentTs < 3000) {
+        showToast('Aguarde 3 segundos entre mensagens.', 'info');
+        return;
+      }
+
+      lastChatSentTs = now;
+      input.value = '';
+
+      const msgObj = {
+        id: clientId + '_' + now,
+        nick: currentUser.nick,
+        avatar: currentUser.avatar,
+        color: currentUser.color,
+        text: text,
+        ts: now
+      };
+
+      addChatMessageToUI(msgObj, true);
+      publishSync(TOPIC_CHAT, { type: 'chat', message: msgObj });
+    }
+
+    function addChatMessageToUI(msg, saveLocal = true) {
+      if (!msg || !msg.id) return;
+      if (chatMessages.some(m => m.id === msg.id)) return;
+
+      chatMessages.push(msg);
+      if (chatMessages.length > 80) {
+        chatMessages = chatMessages.slice(-80);
+      }
+      if (saveLocal) {
+        localStorage.setItem('jgta_chat_history', JSON.stringify(chatMessages));
+      }
+
+      if (activeRightTab !== 'chat') {
+        document.getElementById('chat-unread-dot').classList.remove('hidden');
+      }
+
+      renderChatMessages();
+    }
+
+    function renderChatMessages() {
+      const container = document.getElementById('chat-messages-container');
+      if (chatMessages.length === 0) {
+        container.innerHTML = `
+          <div class="h-full flex flex-col items-center justify-center text-center p-6 text-gray-500 space-y-2">
+            <i data-lucide="message-circle" class="w-8 h-8 text-gray-600"></i>
+            <p class="text-xs font-medium text-gray-400">Nenhuma mensagem recente no chat.</p>
+            <p class="text-[11px]">Seja o primeiro jogador real a mandar um salve para a galera!</p>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = chatMessages.map(m => {
+        const timeStr = new Date(m.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        return `
+          <div class="flex items-start gap-2.5 text-xs group">
+            <div class="w-7 h-7 rounded-lg bg-vice-panel border border-vice-border flex items-center justify-center text-xs shrink-0 mt-0.5">
+              ${escapeHTML(m.avatar || m.nick.charAt(0).toUpperCase())}
+            </div>
+            <div class="min-w-0 flex-1 bg-vice-panel/60 rounded-xl px-3 py-2 border border-vice-border/50">
+              <div class="flex items-center justify-between gap-2 mb-0.5">
+                <span class="font-bold truncate" style="color: ${escapeHTML(m.color || '#ff2a85')}">${escapeHTML(m.nick)}</span>
+                <span class="text-[10px] font-mono text-gray-500 shrink-0">${timeStr}</span>
+              </div>
+              <p class="text-gray-200 break-words leading-relaxed">${escapeHTML(m.text)}</p>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // =========================================================================
+    // 8. HALL DA FAMA & ÚLTIMOS ACONTECIMENTOS (FIEL À IMAGEM 1)
+    // =========================================================================
+    const HALL_OF_FAME_DATA = [
+      { rank: 1, nick: 'Raio Z YT', hours: '14h', likes: 48, dislikes: 6, badges: 3, fame: 565, avatar: '👑', border: 'border-vice-yellow/60', crownColor: 'text-vice-yellow' },
+      { rank: 2, nick: 'Jonaszz', hours: '11h', likes: 38, dislikes: 14, badges: 2, fame: 345, avatar: 'J', border: 'border-gray-400/50', crownColor: 'text-gray-300' },
+      { rank: 3, nick: 'Bingas Bongas', hours: '9h', likes: 29, dislikes: 8, badges: 2, fame: 305, avatar: '🦩', border: 'border-amber-600/50', crownColor: 'text-amber-500' },
+      { rank: 4, nick: 'Luan carniviro', hours: '7h', likes: 22, dislikes: 11, badges: 1, fame: 170, avatar: 'L' },
+      { rank: 5, nick: 'Luan Gomes', hours: '6h', likes: 19, dislikes: 8, badges: 1, fame: 165, avatar: 'L' },
+      { rank: 6, nick: 'Aline Cristina Santos', hours: '5h', likes: 15, dislikes: 2, badges: 1, fame: 180, avatar: 'A' },
+      { rank: 7, nick: 'Matheus Phenton', hours: '4h', likes: 14, dislikes: 3, badges: 1, fame: 155, avatar: 'M' },
+      { rank: 8, nick: 'baguncinha', hours: '4h', likes: 12, dislikes: 1, badges: 1, fame: 155, avatar: 'B' },
+      { rank: 9, nick: 'Thiago', hours: '3h', likes: 11, dislikes: 2, badges: 0, fame: 105, avatar: 'T' },
+      { rank: 10, nick: 's4mple-', hours: '3h', likes: 14, dislikes: 6, badges: 0, fame: 95, avatar: 'S' }
+    ];
+
+    function renderHallOfFame() {
+      const top3Container = document.getElementById('hall-top3-container');
+      const listContainer = document.getElementById('hall-list-container');
+
+      const top3 = HALL_OF_FAME_DATA.slice(0, 3);
+      top3Container.innerHTML = top3.map(p => `
+        <div class="bg-vice-card border ${p.border} rounded-2xl p-4 flex flex-col items-center text-center shadow-lg relative overflow-hidden">
+          <div class="flex items-center gap-1 text-xs font-black ${p.crownColor} mb-3">
+            <i data-lucide="crown" class="w-3.5 h-3.5"></i>
+            <span>#${p.rank}</span>
+          </div>
+          <div class="w-14 h-14 rounded-full bg-vice-panel border-2 border-white/15 flex items-center justify-center text-xl font-black text-white mb-2.5 shadow-inner">
+            ${p.avatar}
+          </div>
+          <div class="font-bold text-sm text-white truncate max-w-full">${p.nick}</div>
+          <div class="my-2 px-2 py-0.5 rounded bg-vice-panel border border-vice-border text-[10px] font-bold text-vice-cyan">
+            ★ ${p.badges} CONQUISTAS
+          </div>
+          <div class="flex items-center justify-center gap-2.5 text-[11px] text-gray-400 mt-1">
+            <span>🕒 ${p.hours}</span>
+            <span class="text-emerald-400">👍 ${p.likes}</span>
+            <span class="text-rose-400">👎 ${p.dislikes}</span>
+          </div>
+          <div class="mt-2 text-xs font-mono font-bold text-vice-cyan">
+            Fama ${p.fame}
+          </div>
+        </div>
+      `).join('');
+
+      const rest = HALL_OF_FAME_DATA.slice(3);
+      listContainer.innerHTML = rest.map(p => `
+        <div class="bg-vice-card hover:bg-vice-panel/70 border border-vice-border rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 transition">
+          <div class="flex items-center gap-3 min-w-0">
+            <span class="font-mono text-xs font-bold text-gray-500 w-5">${String(p.rank).padStart(2, '0')}</span>
+            <div class="w-8 h-8 rounded-full bg-vice-panel border border-vice-border flex items-center justify-center text-xs font-bold text-gray-200 shrink-0">
+              ${p.avatar}
+            </div>
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-white truncate">${p.nick}</div>
+              <div class="flex items-center gap-2.5 text-[10px] text-gray-400">
+                <span>🕒 ${p.hours}</span>
+                <span class="text-emerald-400">👍 ${p.likes}</span>
+                <span class="text-rose-400">👎 ${p.dislikes}</span>
+              </div>
+            </div>
+          </div>
+          <div class="font-mono text-xs font-bold text-vice-cyan shrink-0">
+            ${p.fame}
+          </div>
+        </div>
+      `).join('');
+
+      lucide.createIcons();
+    }
+
+    function initDefaultEventsIfNeeded() {
+      if (recentEvents.length === 0) {
+        const state = getGlobalTimeState();
+        const prev1 = FIXED_QUEUE_242[(state.currentSlot - 1 + 242) % 242];
+        const prev2 = FIXED_QUEUE_242[(state.currentSlot - 2 + 242) % 242];
+        const prev3 = FIXED_QUEUE_242[(state.currentSlot - 3 + 242) % 242];
+        const now = Date.now();
+
+        recentEvents = [
+          { text: `${state.currentPlayingNick} assumiu o controle (turno de 10:00)`, dotColor: 'cyan', ts: now - (600000 - state.remainingMs) },
+          { text: `${prev1} concluiu a sessão de 10 minutos em Vice City`, dotColor: 'pink', ts: now - (600000 - state.remainingMs) - 5000 },
+          { text: `${prev2} recebeu +12 likes da comunidade na sessão`, dotColor: 'green', ts: now - 720000 },
+          { text: `${prev3} completou missão em Ocean Drive`, dotColor: 'cyan', ts: now - 1320000 }
+        ];
+        localStorage.setItem('jgta_events_history', JSON.stringify(recentEvents));
+      }
+      renderEventsFeed();
+    }
+
+    function addEventToFeed(text, dotColor = 'cyan', broadcast = false) {
+      recentEvents.unshift({ text, dotColor, ts: Date.now() });
+      if (recentEvents.length > 12) recentEvents = recentEvents.slice(0, 12);
+      localStorage.setItem('jgta_events_history', JSON.stringify(recentEvents));
+      renderEventsFeed();
+
+      if (broadcast) {
+        publishSync(TOPIC_EVENTS, { type: 'event', text, dotColor });
+      }
+    }
+
+    function renderEventsFeed() {
+      const container = document.getElementById('events-feed-container');
+      const colorMap = {
+        cyan: 'bg-vice-cyan',
+        pink: 'bg-vice-pink',
+        green: 'bg-emerald-400',
+        yellow: 'bg-vice-yellow'
+      };
+
+      container.innerHTML = recentEvents.map(ev => {
+        const timeStr = new Date(ev.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const dotClass = colorMap[ev.dotColor] || 'bg-vice-pink';
+        return `
+          <div class="bg-vice-card border border-vice-border rounded-xl px-4 py-3 flex items-center justify-between gap-3 text-xs">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="w-2 h-2 rounded-full ${dotClass} shrink-0"></span>
+              <span class="text-gray-200 truncate">${escapeHTML(ev.text)}</span>
+            </div>
+            <span class="font-mono text-[11px] text-gray-500 shrink-0">${timeStr}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // =========================================================================
+    // 9. ATUALIZAÇÃO DA INTERFACE PRINCIPAL A CADA SEGUNDO
+    // =========================================================================
+    function updateUI() {
+      const state = getGlobalTimeState();
+      const timeFormatted = formatMMSS(state.remainingMs);
+      const pctRemaining = Math.max(0, Math.min(100, (state.remainingMs / TURN_DURATION_MS) * 100));
+
+      // Relógio UTC no topo
+      const utcStr = new Date(state.now).toISOString().substring(11, 19);
+      document.getElementById('utc-clock-display').textContent = `UTC ${utcStr}`;
+
+      // Detecta troca de turno automática a cada 10 minutos
+      if (lastRenderedSlot !== -1 && lastRenderedSlot !== state.currentSlot) {
+        addEventToFeed(`${state.currentPlayingNick} iniciou turno de 10 minutos`, 'cyan', false);
+        // Se o usuário estava na fila e chegou na posição 1, dispara "Sua vez!"
+        if (myQueueEntry && state.myPosition === 1) {
+          triggerYourTurn();
+        }
+      }
+      lastRenderedSlot = state.currentSlot;
+
+      // Jogador Atual no Controle
+      document.getElementById('current-player-name').textContent = state.currentPlayingNick;
+      document.getElementById('current-player-avatar').textContent = state.currentPlayingNick.charAt(0).toUpperCase();
+      document.getElementById('footer-playing-name').textContent = state.currentPlayingNick;
+      document.getElementById('session-turn-number').textContent = (state.currentSlot % 100000);
+
+      // Cronômetros
+      document.getElementById('session-timer-big').textContent = timeFormatted;
+      document.getElementById('stat-time-left').textContent = timeFormatted;
+      document.getElementById('session-progress-bar').style.width = `${pctRemaining}%`;
+
+      // Contadores globais (242 base + usuários reais na fila!)
+      document.getElementById('stat-queue-total').textContent = state.totalInQueue;
+      document.getElementById('sidebar-total-badge').textContent = state.totalInQueue;
+      document.getElementById('tab-queue-count').textContent = state.totalInQueue;
+
+      // Online no site (base realista sincronizada com o slot + peers reais conectados)
+      const activePeersCount = Object.keys(onlinePeers).filter(id => state.now - onlinePeers[id] < 35000).length;
+      const baseOnline = 310 + (state.currentSlot % 29);
+      document.getElementById('stat-online-count').textContent = baseOnline + Math.max(1, activePeersCount);
+
+      // Sessões realizadas hoje
+      const startOfDay = new Date(state.now);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const sessionsToday = Math.floor((state.now - startOfDay.getTime()) / TURN_DURATION_MS) + 1;
+      document.getElementById('stat-sessions-today').textContent = sessionsToday;
+
+      // Likes/dislikes determinísticos por turno + voto do usuário
+      const baseLikes = 8 + (state.currentSlot % 19);
+      const baseDislikes = state.currentSlot % 5;
+      const myVote = votedSlots[state.currentSlot];
+      document.getElementById('current-likes-count').textContent = baseLikes + (myVote === 'like' ? 1 : 0);
+      document.getElementById('current-dislikes-count').textContent = baseDislikes + (myVote === 'dislike' ? 1 : 0);
+
+      // Pills dos próximos 3 da fila
+      const next3 = state.fullQueue.slice(0, 3);
+      document.getElementById('next-in-queue-pills').innerHTML = next3.map((p, i) => `
+        <span class="px-2.5 py-1 rounded-lg bg-vice-panel border ${p.isMe ? 'border-vice-pink text-vice-pink font-bold' : 'border-vice-border text-gray-300'} text-[11px] flex items-center gap-1">
+          <span class="text-gray-500 font-mono">#${i + 1}</span>
+          <span>${escapeHTML(p.nick)}</span>
+        </span>
+      `).join('');
+
+      // Caixa Central de Ação da Fila do Usuário
+      renderUserQueueHeroBox(state);
+
+      // Cabeçalho da Sidebar da Fila
+      const sidebarTitle = document.getElementById('sidebar-queue-status-title');
+      const sidebarEta = document.getElementById('sidebar-queue-eta');
+      const btnFindMe = document.getElementById('btn-find-me');
+
+      if (myQueueEntry && state.myPosition > 0) {
+        sidebarTitle.innerHTML = `Sua posição na fila • <span class="text-vice-yellow font-mono">#${state.myPosition}</span> <span class="text-gray-400 font-normal">de ${state.totalInQueue}</span>`;
+        sidebarEta.textContent = `Tempo estimado: ${formatEstimatedWait(state.myPosition)} • Posição salva`;
+        btnFindMe.classList.remove('hidden');
+      } else {
+        sidebarTitle.innerHTML = `Fila Global Ativa • <span class="text-white font-mono">${state.totalInQueue}</span> jogadores`;
+        sidebarEta.textContent = `Entre agora para ocupar a posição #${state.totalInQueue + 1}`;
+        btnFindMe.classList.add('hidden');
+      }
+
+      // Renderiza lista da fila (apenas quando a aba fila está visível para performance)
+      if (activeRightTab === 'queue') {
+        renderQueueList(state);
+      }
+    }
+
+    function renderUserQueueHeroBox(state) {
+      const box = document.getElementById('user-queue-hero-box');
+
+      if (!myQueueEntry) {
+        // Usuário FORA da fila
+        box.innerHTML = `
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="space-y-1 text-center sm:text-left">
+              <div class="text-xs font-bold uppercase tracking-wider text-vice-pink flex items-center justify-center sm:justify-start gap-1.5">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                <span>Acesso Gratuito • Turno de 10 Minutos</span>
+              </div>
+              <h3 class="text-base sm:text-lg font-extrabold text-white">
+                Quer assumir o controle de GTA VI?
+              </h3>
+              <p class="text-xs text-gray-400">
+                Há <strong class="text-white">${state.totalInQueue} jogadores</strong> na fila agora. Sua posição fica salva mesmo se atualizar a página.
+              </p>
+            </div>
+
+            <button onclick="joinQueue()" class="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-gradient-to-r from-vice-pink to-purple-600 hover:brightness-110 text-white font-black text-xs sm:text-sm uppercase tracking-wide shadow-lg vice-glow-pink transition shrink-0 flex items-center justify-center gap-2 cursor-pointer">
+              <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+              <span>Entrar na Fila (#${state.totalInQueue + 1})</span>
+            </button>
+          </div>
+        `;
+      } else {
+        // Usuário DENTRO da fila
+        box.innerHTML = `
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+              <div class="w-14 h-14 rounded-2xl bg-vice-pink/15 border border-vice-pink/50 flex flex-col items-center justify-center shrink-0">
+                <span class="text-[10px] font-bold text-vice-pink uppercase">POS</span>
+                <span class="font-mono text-lg font-black text-white">#${state.myPosition}</span>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-extrabold text-emerald-400">● VOCÊ ESTÁ NA FILA</span>
+                  <span class="text-[11px] font-mono text-gray-400">(${state.myPosition}/${state.totalInQueue})</span>
+                </div>
+                <p class="text-xs text-gray-300 mt-0.5">
+                  Espera estimada: <strong class="text-white">${formatEstimatedWait(state.myPosition)}</strong> • Sincronizado na sua conta.
+                </p>
+                <div class="mt-1.5 flex items-center gap-3">
+                  <button onclick="simulateMyTurnNow()" class="text-[11px] text-vice-cyan hover:underline font-semibold flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="zap" class="w-3 h-3"></i>
+                    <span>Simular chegada da minha vez</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <button onclick="leaveQueue(false)" class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-vice-panel hover:bg-rose-500/20 border border-vice-border hover:border-rose-500/40 text-xs font-bold text-gray-300 hover:text-rose-300 transition shrink-0 cursor-pointer">
+              Sair da fila
+            </button>
+          </div>
+        `;
+      }
+      lucide.createIcons();
+    }
+
+    function renderQueueList(state) {
+      const container = document.getElementById('queue-list-container');
+      const scrollPos = container.scrollTop;
+
+      container.innerHTML = state.fullQueue.map((item, idx) => {
+        const pos = idx + 1;
+        const isMe = item.isMe;
+        const isReal = item.isRealUser;
+        return `
+          <div id="${isMe ? 'my-queue-row' : ''}" class="px-3 py-2 rounded-xl flex items-center justify-between gap-2 text-xs border transition ${
+            isMe 
+              ? 'bg-vice-pink/15 border-vice-pink text-white font-bold' 
+              : isReal
+                ? 'bg-vice-cyan/10 border-vice-cyan/40 text-gray-100'
+                : 'bg-[#160f25] border-vice-border/40 text-gray-300'
+          }">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="font-mono text-[11px] w-8 text-right shrink-0 ${isMe ? 'text-vice-pink font-black' : 'text-gray-500'}">#${pos}</span>
+              <div class="w-6 h-6 rounded-md bg-vice-panel border border-white/10 flex items-center justify-center text-[11px] font-bold shrink-0" style="color: ${isReal ? item.color : '#cbd5e1'}">
+                ${escapeHTML(item.avatar)}
+              </div>
+              <span class="truncate">${escapeHTML(item.nick)}</span>
+              ${isMe ? '<span class="px-1.5 py-0.5 text-[9px] rounded bg-vice-pink text-white font-black uppercase">VOCÊ</span>' : ''}
+              ${(!isMe && isReal) ? '<span class="px-1.5 py-0.5 text-[9px] rounded bg-vice-cyan/20 text-vice-cyan font-bold">ONLINE</span>' : ''}
+            </div>
+            <span class="font-mono text-[10px] text-gray-500 shrink-0">${formatEstimatedWait(pos)}</span>
+          </div>
+        `;
+      }).join('');
+
+      container.scrollTop = scrollPos;
+    }
+
+    function scrollToMyPosition() {
+      const row = document.getElementById('my-queue-row');
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+
+    // =========================================================================
+    // 10. INTERAÇÕES AUXILIARES (ABAS, VOTOS, TOASTS, UTILITÁRIOS)
+    // =========================================================================
+    function switchRightTab(tab) {
+      activeRightTab = tab;
+      const tabs = ['queue', 'chat', 'rules'];
+      tabs.forEach(t => {
+        const btn = document.getElementById(`tab-btn-${t}`);
+        const content = document.getElementById(`tab-content-${t}`);
+        if (t === tab) {
+          btn.classList.add('bg-vice-panel', 'text-white', 'shadow');
+          btn.classList.remove('text-gray-400');
+          content.classList.remove('hidden');
+        } else {
+          btn.classList.remove('bg-vice-panel', 'text-white', 'shadow');
+          btn.classList.add('text-gray-400');
+          content.classList.add('hidden');
+        }
+      });
+
+      if (tab === 'chat') {
+        document.getElementById('chat-unread-dot').classList.add('hidden');
+        renderChatMessages();
+      } else if (tab === 'queue') {
+        updateUI();
+      }
+    }
+
+    function openRulesModal() {
+      switchRightTab('rules');
+      document.getElementById('tab-btn-rules').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function voteCurrentPlayer(type) {
+      const state = getGlobalTimeState();
+      if (votedSlots[state.currentSlot] === type) return;
+      votedSlots[state.currentSlot] = type;
+      localStorage.setItem('jgta_voted_slots', JSON.stringify(votedSlots));
+      updateUI();
+      showToast(type === 'like' ? 'Você curtiu a jogada atual!' : 'Avaliação registrada.', 'info');
+    }
+
+    function toggleSoundNotification() {
+      soundNotifyEnabled = !soundNotifyEnabled;
+      const btn = document.getElementById('btn-notify-bell');
+      btn.classList.toggle('text-vice-yellow', soundNotifyEnabled);
+      btn.classList.toggle('text-gray-500', !soundNotifyEnabled);
+      showToast(soundNotifyEnabled ? 'Alerta sonoro ativado.' : 'Alerta sonoro silenciado.', 'info');
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const colors = {
+        success: 'border-emerald-500/50 bg-[#15241e] text-emerald-200',
+        error: 'border-rose-500/50 bg-[#26141c] text-rose-200',
+        info: 'border-vice-border bg-vice-panel text-gray-100'
+      };
+      toast.className = `pointer-events-auto px-4 py-3 rounded-xl border ${colors[type] || colors.info} text-xs font-semibold shadow-2xl flex items-center gap-2 transition-all duration-300`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 3200);
+    }
+
+    function escapeHTML(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // =========================================================================
+    // 11. INICIALIZAÇÃO DO SISTEMA
+    // =========================================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      renderHeaderUserArea();
+      updateChatInputState();
+      renderChatMessages();
+      renderHallOfFame();
+      initDefaultEventsIfNeeded();
+      initRealtimeSync();
+      updateUI();
+      lucide.createIcons();
+
+      // Loop principal de 1 segundo sincronizado
+      setInterval(() => {
+        updateUI();
+        // Variação sutil realista de ping
+        const pingEl = document.getElementById('ping-display');
+        if (pingEl) {
+          const ping = 12 + Math.floor(Math.random() * 6);
+          pingEl.textContent = `${ping} ms`;
+        }
+      }, 1000);
+    });
+  </script>
+</body>
+</html>
