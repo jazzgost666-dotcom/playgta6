@@ -1,1 +1,2925 @@
 
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jogar GTA — Fila Comunitária Remota</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    :root {
+      --bg-body: #0b0d12;
+      --bg-topbar: #0f1219;
+      --bg-panel: #12151e;
+      --bg-card: #181c28;
+      --bg-card-hover: #1e2332;
+      --bg-input: #0e1118;
+      --border: #252b3b;
+      --border-light: #323a4f;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --accent-green: #53fc18;
+      --accent-green-dark: #3bc70c;
+      --accent-blue: #38bdf8;
+      --accent-amber: #f59e0b;
+      --accent-red: #ef4444;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background-color: var(--bg-body);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input {
+      font-family: inherit;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    /* Scrollbar discreta */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-body);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-light);
+      border-radius: 99px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    /* ==================== TOPBAR ==================== */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: var(--bg-topbar);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar-main {
+      max-width: 1440px;
+      margin: 0 auto;
+      height: 60px;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: #1c2230;
+      border: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 14px;
+      color: var(--text-main);
+      letter-spacing: -0.5px;
+    }
+
+    .brand-icon span {
+      color: var(--accent-green);
+    }
+
+    .brand-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+      font-size: 17px;
+      letter-spacing: -0.3px;
+    }
+
+    .badge-vi {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #23293a;
+      border: 1px solid var(--border-light);
+      color: var(--text-main);
+      letter-spacing: 0.5px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .nav-link {
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 0.3px;
+      transition: background 0.15s, color 0.15s;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .nav-link:hover {
+      background: var(--bg-card);
+      color: var(--text-main);
+    }
+
+    .nav-link.active {
+      background: var(--bg-card);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .live-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 12px;
+      border-radius: 99px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 0 0 rgba(83, 252, 24, 0.5);
+      animation: pulseDot 2s infinite;
+    }
+
+    @keyframes pulseDot {
+      0% { box-shadow: 0 0 0 0 rgba(83, 252, 24, 0.5); }
+      70% { box-shadow: 0 0 0 6px rgba(83, 252, 24, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(83, 252, 24, 0); }
+    }
+
+    .topbar-sub {
+      background: #0c0e14;
+      border-top: 1px solid #191e2b;
+      padding: 5px 20px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .topbar-sub-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    /* Botões padrão */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 9px 16px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-weight: 700;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-main);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    }
+
+    .btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-light);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn-primary {
+      background: var(--accent-green);
+      color: #070a0e;
+      border-color: var(--accent-green);
+      font-weight: 800;
+    }
+
+    .btn-primary:hover {
+      background: #65ff2e;
+      border-color: #65ff2e;
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+    }
+
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.2);
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: var(--radius-sm);
+    }
+
+    /* User profile button in header */
+    .user-chip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 12px 4px 6px;
+      border-radius: var(--radius-md);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .user-chip:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-light);
+    }
+
+    .avatar-circle {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 13px;
+      color: #0b0d12;
+      flex-shrink: 0;
+    }
+
+    .user-chip-info {
+      text-align: left;
+      line-height: 1.2;
+    }
+
+    .user-chip-name {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-main);
+      max-width: 120px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .user-chip-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* ==================== CONTAINER PRINCIPAL ==================== */
+    .container {
+      max-width: 1440px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 20px;
+      flex: 1;
+    }
+
+    .section-header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .section-title-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .section-title-group h1 {
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+      text-transform: uppercase;
+    }
+
+    .tag-pill {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 5px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .tag-pill.highlight {
+      color: var(--accent-blue);
+      border-color: rgba(56, 189, 248, 0.3);
+      background: rgba(56, 189, 248, 0.08);
+    }
+
+    .server-telemetry {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .mono {
+      font-family: var(--font-mono);
+    }
+
+    /* ==================== GRID PRINCIPAL (68% / 32%) ==================== */
+    .main-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 68%) minmax(320px, 32%);
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* ==================== PAINEL DO CONSOLE REMOTO (ESQUERDA) ==================== */
+    .console-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .console-stage {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .console-topbar {
+      padding: 12px 18px;
+      background: #0f121a;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 12px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(83, 252, 24, 0.1);
+      border: 1px solid rgba(83, 252, 24, 0.25);
+      color: var(--accent-green);
+      font-weight: 700;
+      font-size: 11px;
+    }
+
+    .console-meta-tags {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    .console-meta-tags span {
+      padding: 3px 8px;
+      border-radius: 5px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+    }
+
+    /* Área central 16:9 sem vídeo, telemetria sobria */
+    .console-viewport {
+      position: relative;
+      min-height: 410px;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 24px;
+      background-color: #0e1118;
+      background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+
+    .console-cards-row {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .telemetry-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .player-now-card {
+      flex-direction: row;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .player-now-avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 14px;
+      background: #23293a;
+      border: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--text-main);
+      flex-shrink: 0;
+    }
+
+    .player-now-info {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .control-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--accent-blue);
+      margin-bottom: 4px;
+    }
+
+    .player-now-name {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      letter-spacing: -0.4px;
+    }
+
+    .player-now-sub {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* Cronômetro de 06:00 */
+    .timer-card {
+      align-items: center;
+      text-align: center;
+    }
+
+    .timer-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .timer-digits {
+      font-family: var(--font-mono);
+      font-size: 44px;
+      font-weight: 800;
+      color: var(--text-main);
+      line-height: 1.1;
+      letter-spacing: -1px;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 6px;
+      background: var(--bg-body);
+      border-radius: 99px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      margin-top: 12px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--accent-green);
+      transition: width 0.8s linear;
+    }
+
+    .timer-hint {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* Faixa central de estado do usuário no console */
+    .queue-banner-box {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .queue-banner-text h3 {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+
+    .queue-banner-text p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    /* Rodapé interno do console: Próximos + Reações */
+    .console-viewport-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    .next-players-list {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .next-pill {
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .next-pill strong {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .next-pill.is-me {
+      border-color: var(--accent-green);
+      color: var(--accent-green);
+    }
+
+    .reaction-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .vote-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 7px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .vote-btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-light);
+    }
+
+    .vote-btn.voted-like {
+      border-color: var(--accent-green);
+      color: var(--accent-green);
+    }
+
+    .vote-btn.voted-dislike {
+      border-color: var(--accent-red);
+      color: #fca5a5;
+    }
+
+    /* Barra inferior do painel (Estilo Kick/JogarGTA) */
+    .console-bottom-bar {
+      padding: 14px 18px;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .playing-summary {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .controller-badge {
+      width: 38px;
+      height: 38px;
+      border-radius: 9px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .metrics-row {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .metric-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .metric-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+    }
+
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Barra de ações abaixo do painel */
+    .action-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+    }
+
+    .action-toolbar-left, .action-toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* ==================== SIDEBAR DIREITA (FILA + CHAT + ONLINE) ==================== */
+    .sidebar-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      display: flex;
+      flex-direction: column;
+      height: 615px;
+      overflow: hidden;
+    }
+
+    .sidebar-queue-card {
+      padding: 16px;
+      background: #141824;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .sidebar-queue-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .queue-pos-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+
+    .queue-pos-title .pos-num {
+      color: var(--accent-green);
+      font-family: var(--font-mono);
+    }
+
+    .queue-eta-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .tabs-bar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      background: var(--bg-body);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .tab-btn {
+      padding: 7px 6px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+    }
+
+    .tab-btn.active {
+      background: var(--bg-card);
+      color: var(--text-main);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+
+    .unread-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      display: none;
+    }
+
+    .unread-dot.visible {
+      display: inline-block;
+    }
+
+    .tab-pane {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .tab-pane.active {
+      display: flex;
+    }
+
+    .pane-subheader {
+      padding: 8px 14px;
+      background: #0f121a;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .link-btn {
+      background: none;
+      border: none;
+      color: var(--accent-blue);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .link-btn:hover {
+      text-decoration: underline;
+    }
+
+    /* Lista da Fila */
+    .scroll-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .queue-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--bg-card);
+      border: 1px solid transparent;
+      font-size: 12px;
+    }
+
+    .queue-row.now-playing {
+      background: rgba(56, 189, 248, 0.08);
+      border-color: rgba(56, 189, 248, 0.3);
+    }
+
+    .queue-row.is-me {
+      background: rgba(83, 252, 24, 0.09);
+      border-color: rgba(83, 252, 24, 0.45);
+      font-weight: 700;
+    }
+
+    .queue-row-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .queue-rank {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      width: 34px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .queue-row.is-me .queue-rank {
+      color: var(--accent-green);
+      font-weight: 800;
+    }
+
+    .mini-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: #23293a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .queue-nick {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text-main);
+    }
+
+    .badge-tag {
+      font-size: 9px;
+      font-weight: 800;
+      padding: 2px 5px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    .badge-tag.you {
+      background: var(--accent-green);
+      color: #070a0e;
+    }
+
+    .badge-tag.live {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent-blue);
+    }
+
+    .queue-wait {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      flex-shrink: 0;
+    }
+
+    /* Chat ao vivo */
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .chat-empty {
+      margin: auto;
+      text-align: center;
+      padding: 24px 16px;
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+
+    .chat-empty strong {
+      display: block;
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    .chat-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      font-size: 12px;
+    }
+
+    .chat-bubble {
+      flex: 1;
+      min-width: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+    }
+
+    .chat-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 2px;
+    }
+
+    .chat-author {
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .chat-time {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    .chat-text {
+      color: var(--text-main);
+      word-break: break-word;
+      line-height: 1.4;
+    }
+
+    .chat-form {
+      padding: 10px 12px;
+      background: #0f121a;
+      border-top: 1px solid var(--border);
+    }
+
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .chat-input {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: var(--text-main);
+      font-size: 12px;
+      outline: none;
+    }
+
+    .chat-input:focus {
+      border-color: var(--border-light);
+    }
+
+    .chat-hint {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 6px;
+    }
+
+    /* ==================== SEÇÃO INFERIOR: COMUNIDADE JOGARGTA ==================== */
+    .community-section {
+      margin-top: 34px;
+      padding-top: 26px;
+      border-top: 1px solid var(--border);
+    }
+
+    .community-header {
+      margin-bottom: 18px;
+    }
+
+    .community-header h2 {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      text-transform: uppercase;
+    }
+
+    .community-header p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .community-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 60%) minmax(0, 40%);
+      gap: 22px;
+      align-items: start;
+    }
+
+    .block-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--text-main);
+      margin-bottom: 3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .block-subtitle {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 14px;
+    }
+
+    /* Pódio Top 3 */
+    .podium-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .podium-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 12px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .podium-card.rank-1 {
+      border-color: rgba(245, 158, 11, 0.45);
+    }
+
+    .podium-rank {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 800;
+      margin-bottom: 10px;
+      color: var(--text-muted);
+    }
+
+    .podium-card.rank-1 .podium-rank {
+      color: var(--accent-amber);
+    }
+
+    .podium-avatar {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    .podium-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .podium-stats {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+
+    .podium-fame {
+      margin-top: 8px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent-blue);
+    }
+
+    /* Lista #04 a #10 */
+    .hall-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .hall-row {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .hall-row-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .hall-num {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-dim);
+      width: 22px;
+    }
+
+    .hall-avatar-sm {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .hall-info-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .hall-info-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      gap: 10px;
+    }
+
+    .hall-score {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent-blue);
+    }
+
+    .fame-formula {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* Feed de Últimos Acontecimentos */
+    .events-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .event-row {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 11px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 12px;
+    }
+
+    .event-row-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .event-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .event-dot.green { background: var(--accent-green); }
+    .event-dot.blue { background: var(--accent-blue); }
+    .event-dot.amber { background: var(--accent-amber); }
+    .event-dot.red { background: var(--accent-red); }
+
+    .event-text {
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .event-time {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      flex-shrink: 0;
+    }
+
+    /* ==================== MODAIS & OVERLAYS ==================== */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      background: rgba(7, 9, 14, 0.85);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 440px;
+      padding: 24px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .modal-header h3 {
+      font-size: 17px;
+      font-weight: 800;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .form-input {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text-main);
+      font-size: 13px;
+      outline: none;
+    }
+
+    .form-input:focus {
+      border-color: var(--accent-blue);
+    }
+
+    .color-swatches {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .swatch-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+    }
+
+    .swatch-btn.selected {
+      border-color: #ffffff;
+      transform: scale(1.1);
+    }
+
+    .modal-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    /* Overlay "Sua Vez!" */
+    .turn-modal-card {
+      max-width: 460px;
+      text-align: center;
+      border-color: var(--accent-green);
+    }
+
+    .turn-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 99px;
+      background: rgba(83, 252, 24, 0.12);
+      border: 1px solid rgba(83, 252, 24, 0.35);
+      color: var(--accent-green);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .turn-title {
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      color: var(--text-main);
+      margin-bottom: 6px;
+    }
+
+    .turn-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 18px;
+    }
+
+    .turn-info-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 18px;
+      font-size: 12px;
+    }
+
+    .turn-info-item span {
+      display: block;
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--border-light);
+      border-top-color: var(--accent-green);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 14px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Toast */
+    .toast-stack {
+      position: fixed;
+      bottom: 18px;
+      right: 18px;
+      z-index: 80;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .toast-msg {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      color: var(--text-main);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    }
+
+    .footer {
+      margin-top: 40px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-topbar);
+      padding: 18px 20px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .footer-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    /* ==================== RESPONSIVO ==================== */
+    @media (max-width: 1024px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+      .community-grid {
+        grid-template-columns: 1fr;
+      }
+      .sidebar-panel {
+        height: 520px;
+      }
+    }
+
+    @media (max-width: 680px) {
+      .nav-links {
+        display: none;
+      }
+      .console-cards-row {
+        grid-template-columns: 1fr;
+      }
+      .podium-grid {
+        grid-template-columns: 1fr;
+      }
+      .console-viewport {
+        padding: 18px;
+      }
+      .timer-digits {
+        font-size: 36px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-main">
+      <div class="topbar-left">
+        <a href="#" class="brand">
+          <div class="brand-icon">J<span>G</span></div>
+          <div class="brand-title">
+            Jogar GTA
+            <span class="badge-vi">VI</span>
+          </div>
+        </a>
+
+        <nav class="nav-links">
+          <a href="#sessao" class="nav-link active">JOGAR</a>
+          <a href="#comunidade" class="nav-link">COMUNIDADE</a>
+          <button type="button" class="nav-link" onclick="openRulesInfo()">REGRAS</button>
+          <a href="#status-bar" class="nav-link">STATUS</a>
+        </nav>
+      </div>
+
+      <div class="topbar-right">
+        <div class="live-pill">
+          <span class="pulse-dot"></span>
+          <span>SESSÃO ATIVA</span>
+        </div>
+        <div id="header-user-slot"></div>
+      </div>
+    </div>
+
+    <div class="topbar-sub">
+      <div class="topbar-sub-inner">
+        <span>Site de fãs não oficial • Sessões remotas rotativas de 6 minutos por jogador.</span>
+        <span class="mono" id="utc-clock">UTC --:--:--</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTEÚDO PRINCIPAL -->
+  <main class="container">
+    <div id="sessao" class="section-header-bar">
+      <div class="section-title-group">
+        <h1>JOGUE GTA VI COM A COMUNIDADE</h1>
+        <span class="tag-pill">18+</span>
+        <span class="tag-pill highlight">CONSOLE REMOTO • 6 MIN/TURNO</span>
+      </div>
+
+      <div class="server-telemetry">
+        <span>Instância: <strong style="color: var(--text-main);" class="mono">BR-SP-02</strong></span>
+        <span>Ping: <strong style="color: var(--accent-green);" class="mono" id="ping-val">16 ms</strong></span>
+      </div>
+    </div>
+
+    <!-- GRID PRINCIPAL: ESQUERDA (68%) + DIREITA (32%) -->
+    <div class="main-grid">
+
+      <!-- COLUNA ESQUERDA -->
+      <div class="console-wrapper">
+        <div class="console-stage">
+          <!-- Barra superior da instância -->
+          <div class="console-topbar">
+            <div class="status-badge">
+              <span class="pulse-dot"></span>
+              <span>CONTROLE EM USO</span>
+            </div>
+            <div class="console-meta-tags">
+              <span>TURNO #<strong id="turn-id">4812</strong></span>
+              <span>60 FPS • INPUT REMOTO</span>
+            </div>
+          </div>
+
+          <!-- Tela de Telemetria da Sessão (Sem vídeo) -->
+          <div class="console-viewport">
+            <div class="console-cards-row">
+              <!-- Card Jogador Atual -->
+              <div class="telemetry-card player-now-card">
+                <div class="player-now-avatar" id="active-player-avatar">M</div>
+                <div class="player-now-info">
+                  <div class="control-label">● NO CONTROLE AGORA</div>
+                  <div class="player-now-name" id="active-player-name">Carregando...</div>
+                  <div class="player-now-sub">
+                    <span>Gamepad Virtual Ativo</span>
+                    <span>•</span>
+                    <span class="mono">BR • Latência Baixa</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card Cronômetro de 6 Minutos -->
+              <div class="telemetry-card timer-card">
+                <div class="timer-label">TEMPO RESTANTE DO TURNO</div>
+                <div class="timer-digits" id="main-timer">06:00</div>
+                <div class="progress-track">
+                  <div class="progress-fill" id="timer-progress" style="width: 100%;"></div>
+                </div>
+                <div class="timer-hint">Rotação automática a cada 6 minutos</div>
+              </div>
+            </div>
+
+            <!-- Faixa de Posição / Ação do Usuário -->
+            <div class="queue-banner-box" id="hero-queue-box"></div>
+
+            <!-- Rodapé Interno: Próximos da fila + Avaliação -->
+            <div class="console-viewport-footer">
+              <div class="next-players-list">
+                <span style="color: var(--text-muted); font-weight: 600;">Próximos:</span>
+                <div id="next-pills-container" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+              </div>
+
+              <div class="reaction-group">
+                <span style="color: var(--text-dim);">Avaliar sessão:</span>
+                <button type="button" class="vote-btn" id="btn-like" onclick="castVote('like')">
+                  <span>👍</span>
+                  <span class="mono" id="likes-count">11</span>
+                </button>
+                <button type="button" class="vote-btn" id="btn-dislike" onclick="castVote('dislike')">
+                  <span>👎</span>
+                  <span class="mono" id="dislikes-count">2</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Barra Inferior de Métricas -->
+          <div id="status-bar" class="console-bottom-bar">
+            <div class="playing-summary">
+              <div class="controller-badge">🎮</div>
+              <div>
+                <div class="metric-label">JOGANDO AGORA</div>
+                <div style="font-weight: 800; font-size: 14px;" id="bottom-playing-nick">---</div>
+              </div>
+            </div>
+
+            <div class="metrics-row">
+              <div class="metric-item">
+                <span class="metric-label">ONLINE</span>
+                <span class="metric-value">
+                  <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--accent-green);"></span>
+                  <span id="metric-online">214</span>
+                </span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-label">FILA ATUAL</span>
+                <span class="metric-value" style="color: var(--accent-blue);" id="metric-queue-size">123</span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-label">TEMPO RESTANTE</span>
+                <span class="metric-value" id="metric-time-left">06:00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Barra de Ações Abaixo do Painel -->
+        <div class="action-toolbar">
+          <div class="action-toolbar-left" id="toolbar-primary-actions"></div>
+          <div class="action-toolbar-right">
+            <button type="button" class="btn btn-sm" onclick="openChallengesModal()">🏆 Desafios da Sessão</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLUNA DIREITA: SIDEBAR DE FILA E CHAT -->
+      <aside class="sidebar-panel">
+        <div class="sidebar-queue-card">
+          <div class="sidebar-queue-header">
+            <div>
+              <div class="queue-pos-title" id="sidebar-pos-title">Fora da fila • 123 aguardando</div>
+              <div class="queue-eta-sub" id="sidebar-eta-text">Entre na fila para reservar um turno de 6 minutos</div>
+            </div>
+          </div>
+
+          <div id="sidebar-cta-slot"></div>
+
+          <!-- Abas -->
+          <div class="tabs-bar">
+            <button type="button" class="tab-btn active" id="tab-queue" onclick="switchTab('queue')">
+              <span>Fila (<span id="tab-queue-num">123</span>)</span>
+            </button>
+            <button type="button" class="tab-btn" id="tab-chat" onclick="switchTab('chat')">
+              <span>Chat ao vivo</span>
+              <span class="unread-dot" id="chat-dot"></span>
+            </button>
+            <button type="button" class="tab-btn" id="tab-online" onclick="switchTab('online')">
+              <span>Voz</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ABA 1: FILA DO JOGO -->
+        <div class="tab-pane active" id="pane-queue">
+          <div class="pane-subheader">
+            <span>Ordem sincronizada (6 min/jogador)</span>
+            <button type="button" class="link-btn" id="btn-jump-me" style="display: none;" onclick="jumpToMe()">Minha posição</button>
+          </div>
+          <div class="scroll-list" id="queue-list"></div>
+        </div>
+
+        <!-- ABA 2: CHAT AO VIVO REAL (SEM BOTS) -->
+        <div class="tab-pane" id="pane-chat">
+          <div class="pane-subheader">
+            <span>Chat comunitário</span>
+            <span class="mono" id="sync-badge">Conectado</span>
+          </div>
+          <div class="chat-messages" id="chat-feed"></div>
+          <form class="chat-form" onsubmit="sendChatMessage(event)">
+            <div class="chat-input-row">
+              <input type="text" id="chat-input" class="chat-input" maxlength="160" placeholder="Escreva uma mensagem no chat..." />
+              <button type="submit" class="btn btn-primary btn-sm">Enviar</button>
+            </div>
+            <div class="chat-hint">
+              <span id="chat-status-hint">Entre na sua conta para conversar.</span>
+              <span>Intervalo: 3s</span>
+            </div>
+          </form>
+        </div>
+
+        <!-- ABA 3: CANAL DE VOZ -->
+        <div class="tab-pane" id="pane-online">
+          <div class="pane-subheader">
+            <span>Canal de voz da sala</span>
+            <span class="mono" id="online-tab-count">214</span>
+          </div>
+          <div class="scroll-list" id="online-users-list"></div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- SEÇÃO INFERIOR: COMUNIDADE JOGARGTA -->
+    <section id="comunidade" class="community-section">
+      <div class="community-header">
+        <h2>COMUNIDADE JOGARGTA</h2>
+        <p>Os melhores jogadores e o que rolou nas sessões.</p>
+      </div>
+
+      <div class="community-grid">
+        <!-- ESQUERDA: HALL DA FAMA -->
+        <div>
+          <div class="block-title">👑 Hall da fama</div>
+          <div class="block-subtitle">Ranking por likes da comunidade, conquistas e horas no controle.</div>
+
+          <div class="podium-grid" id="hall-podium"></div>
+          <div class="hall-list" id="hall-rows"></div>
+          <div class="fame-formula">Fama = (likes − dislikes) × 10 + 25 por conquista + 5 por hora jogada</div>
+        </div>
+
+        <!-- DIREITA: ÚLTIMOS ACONTECIMENTOS -->
+        <div>
+          <div class="block-title">🕒 Últimos acontecimentos</div>
+          <div class="block-subtitle">Registro recente de turnos e eventos da sala.</div>
+          <div class="events-list" id="events-list"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div><strong style="color: var(--text-main);">Jogar GTA</strong> • Plataforma comunitária de acesso remoto por fila rotativa.</div>
+      <div>Sem vínculo com Rockstar Games ou Take-Two Interactive.</div>
+    </div>
+  </footer>
+
+  <!-- MODAL DE CONTA / EDITAR PERFIL -->
+  <div class="modal-backdrop" id="profile-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="profile-modal-title">Criar Conta / Entrar</h3>
+        <button type="button" class="close-btn" onclick="closeProfileModal()">&times;</button>
+      </div>
+      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+        Seu perfil fica salvo localmente para manter sua vaga na fila e identificar suas mensagens no chat.
+      </p>
+      <form onsubmit="submitProfileForm(event)">
+        <div class="form-group">
+          <label class="form-label" for="input-nick">Nickname</label>
+          <input type="text" id="input-nick" class="form-input" required minlength="3" maxlength="20" placeholder="Ex: Henrique_SP" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="input-bio">Bio curta (opcional)</label>
+          <input type="text" id="input-bio" class="form-input" maxlength="60" placeholder="Ex: Explorando Leonida no modo livre" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cor do Avatar</label>
+          <div class="color-swatches" id="color-swatches"></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-danger btn-sm" id="btn-logout" style="margin-right: auto; display: none;" onclick="logoutAccount()">Sair da conta</button>
+          <button type="button" class="btn btn-sm" onclick="closeProfileModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm">Salvar Perfil</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL DE DESAFIOS / REGRAS -->
+  <div class="modal-backdrop" id="info-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="info-modal-title">Desafios da Sessão</h3>
+        <button type="button" class="close-btn" onclick="closeInfoModal()">&times;</button>
+      </div>
+      <div id="info-modal-body" style="font-size: 13px; color: var(--text-muted); display: flex; flex-direction: column; gap: 10px;"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary btn-sm" onclick="closeInfoModal()">Entendi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OVERLAY DE "SUA VEZ!" -->
+  <div class="modal-backdrop" id="your-turn-modal">
+    <div class="modal-card turn-modal-card">
+      <!-- Passo 1: Aviso de Sua Vez -->
+      <div id="turn-step-prompt">
+        <div class="turn-badge">● Instância Remota Reservada</div>
+        <div class="turn-title">SUA VEZ!</div>
+        <p class="turn-desc">
+          Seu console remoto está pronto para um turno de <strong style="color: var(--text-main);">06:00 minutos</strong>. Confirme antes que o tempo expire.
+        </p>
+
+        <div class="turn-info-box">
+          <div class="turn-info-item">
+            <span>Jogador</span>
+            <strong id="turn-player-nick">---</strong>
+          </div>
+          <div class="turn-info-item">
+            <span>Servidor</span>
+            <strong class="mono">BR-SP-02</strong>
+          </div>
+          <div class="turn-info-item">
+            <span>Expira em</span>
+            <strong class="mono" style="color: var(--accent-amber);" id="turn-countdown">30s</strong>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-primary" style="width: 100%; padding: 13px; font-size: 14px;" onclick="confirmEnterGame()">
+          ENTRAR NO JOGO AGORA
+        </button>
+        <div style="margin-top: 12px;">
+          <button type="button" class="link-btn" style="color: var(--text-dim);" onclick="declineTurn()">Desistir da vez</button>
+        </div>
+      </div>
+
+      <!-- Passo 2: Alocando instância e recarregando -->
+      <div id="turn-step-connecting" style="display: none; padding: 16px 0;">
+        <div class="spinner"></div>
+        <h3 style="font-size: 17px; font-weight: 800; margin-bottom: 6px;">Alocando instância cloud...</h3>
+        <p class="mono" style="font-size: 12px; color: var(--accent-blue);" id="connecting-status-line">
+          Sincronizando controles virtuais...
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOASTS -->
+  <div class="toast-stack" id="toast-stack"></div>
+
+  <script>
+    // =========================================================================
+    // 1. LISTA FIXA DE 123 NICKS BRASILEIROS INÉDITOS (NENHUM NOME DOS PRINTS)
+    // =========================================================================
+    const FIXED_123_PLAYERS = [
+      "Henrique_SP", "CaioViana", "BrunaOliveira", "MuriloTech", "DaviLacerda",
+      "VitorHugo_RJ", "MarianaCosta", "pedrinho_011", "GabiNogueira", "RenanAlmeida",
+      "FelipeBarros", "LuanaRibeiro", "ArthurMendes", "gustavo_zika", "CamilaTavares",
+      "BrunoSiqueira", "TatiRocha", "leonardo_mg", "JulioCesarBR", "LarissaPires",
+      "samuel_plays", "BeatrizMoura", "RodrigoFarias", "kaue_santana", "AmandaBorges",
+      "DanielCardoso", "IsabelaCunha", "andre_luiz98", "ViniciusPorto", "NataliaTeixeira",
+      "paulo_vitor", "YuriRezende", "BiancaCampos", "OtavioGuedes", "FernandaAzevedo",
+      "igor_carvalho", "LetíciaMoreira", "MateusBaptista", "hugo_freitas", "ClaraPacheco",
+      "breno_machado", "AliceRamos", "RafaelaPeixoto", "DouglasVieira", "victor_gabriel",
+      "MelissaDuarte", "fabio_nunes", "SabrinaCastro", "erick_monteiro", "HeloisaLopes",
+      "WesleyCorreia", "joao_paulo07", "NicoleSales", "alex_fernandes", "RayssaMelo",
+      "danilo_braga", "YasminSampaio", "marcelo_dias", "EsterCaldas", "AlanPereira",
+      "luan_miranda", "JéssicaAntunes", "tiago_soares", "MilenaPinheiro", "CesarAugusto",
+      "jonathan_silva", "PriscilaBastos", "ricardo_neves", "EvelynFranco", "WillianQueiroz",
+      "patricia_lima", "SandroMorais", "DeboraAguiar", "edson_junior", "CarlaVasconcelos",
+      "mauricio_rosa", "VitoriaAmaral", "cleber_santos", "RebecaFigueiredo", "NatanielCruz",
+      "simone_alves", "GilbertoMaia", "TalitaFonseca", "robson_souza", "BrendaCoelho",
+      "evandro_reis", "MoniqueCouto", "fagner_batista", "AdrianaLemos", "kelvin_rodrigues",
+      "TatianaVargas", "alisson_prado", "DeniseMacedo", "emerson_torres", "LorenaSiqueira",
+      "jean_carlos", "KarinaEsteves", "valdir_neto", "PalomaRangel", "ramon_teles",
+      "ElaineXavier", "cristiano_vale", "VivianeBrito", "heitor_camargo", "MicheleBarreto",
+      "denis_andrade", "FlaviaDiniz", "anderson_bruno", "RaquelGoulart", "wellington_luz",
+      "IngridPaiva", "luciano_ferraz", "DayaneAssis", "marcio_tavares", "SuellenAragao",
+      "geovane_costa", "CintiaVilela", "ronaldo_pinho", "AndreiaMotta", "sergio_linhares",
+      "MaiaraQueiroz", "juliano_bento", "KatiaNogueira"
+    ];
+
+    // =========================================================================
+    // 2. CONFIGURAÇÕES DE TEMPO (6 MINUTOS) E SINCRONIZAÇÃO GLOBAL UTC
+    // =========================================================================
+    const SESSION_SECONDS = 360; // Exatamente 6 minutos por sessão
+    const SESSION_MS = SESSION_SECONDS * 1000;
+    const GLOBAL_EPOCH_SEC = 1735689600; // Marco fixo UTC (01/01/2025 00:00:00 UTC)
+
+    const MQTT_URL = 'wss://broker.emqx.io:8084/mqtt';
+    const CHANNEL_PREFIX = 'jogargta_comunidade_v2_6min_123';
+    const TOPIC_PRESENCE = `${CHANNEL_PREFIX}/presence`;
+    const TOPIC_CHAT = `${CHANNEL_PREFIX}/chat`;
+    const TOPIC_EVENTS = `${CHANNEL_PREFIX}/events`;
+
+    const bc = ('BroadcastChannel' in window) ? new BroadcastChannel(CHANNEL_PREFIX) : null;
+
+    // Identificador único do navegador
+    let clientId = localStorage.getItem('jgta_v2_cid');
+    if (!clientId) {
+      clientId = 'c_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+      localStorage.setItem('jgta_v2_cid', clientId);
+    }
+
+    // Estado persistente
+    let userProfile = JSON.parse(localStorage.getItem('jgta_v2_profile') || 'null');
+    let myQueueTicket = JSON.parse(localStorage.getItem('jgta_v2_ticket') || 'null');
+    let chatMessages = JSON.parse(localStorage.getItem('jgta_v2_chat') || '[]');
+    let sessionEvents = JSON.parse(localStorage.getItem('jgta_v2_events') || '[]');
+    let votedTurns = JSON.parse(localStorage.getItem('jgta_v2_votes') || '{}');
+
+    // Estado volátil em tempo real
+    let remoteQueuePeers = {};
+    let onlinePeersMap = {};
+    let activeTab = 'queue';
+    let lastChatTime = 0;
+    let lastTurnIndex = -1;
+    let yourTurnOpen = false;
+    let isAllocating = false;
+    let acceptTimer = null;
+    let acceptSecondsLeft = 30;
+    let mqttClient = null;
+
+    const AVATAR_COLORS = ['#53fc18', '#38bdf8', '#f59e0b', '#a78bfa', '#f472b6', '#34d399', '#fb7185', '#60a5fa'];
+    let pickedColor = AVATAR_COLORS[0];
+
+    // =========================================================================
+    // 3. CÁLCULO DETERMINÍSTICO DA FILA (123 FIXOS + USUÁRIOS REAIS = 124+)
+    // =========================================================================
+    function computeQueueSnapshot() {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const elapsedSec = Math.max(0, nowSec - GLOBAL_EPOCH_SEC);
+      const turnIndex = Math.floor(elapsedSec / SESSION_SECONDS);
+      const secIntoTurn = elapsedSec % SESSION_SECONDS;
+      const remainingSec = SESSION_SECONDS - secIntoTurn;
+
+      const activeBaseIdx = turnIndex % FIXED_123_PLAYERS.length;
+      const currentPlayerNick = FIXED_123_PLAYERS[activeBaseIdx];
+
+      // Próximos 123 jogadores da fila fixa rotacionada
+      const queueItems = [];
+      for (let i = 1; i <= FIXED_123_PLAYERS.length; i++) {
+        const idx = (activeBaseIdx + i) % FIXED_123_PLAYERS.length;
+        const nick = FIXED_123_PLAYERS[idx];
+        queueItems.push({
+          nick,
+          isReal: false,
+          isMe: false,
+          color: '#334155'
+        });
+      }
+
+      // Filtra usuários reais ativos nos últimos 30s
+      const nowMs = Date.now();
+      const activeRealPeers = [];
+      Object.values(remoteQueuePeers).forEach(peer => {
+        if (peer.clientId === clientId) return;
+        if (nowMs - peer.lastSeen < 30000) {
+          activeRealPeers.push(peer);
+        } else {
+          delete remoteQueuePeers[peer.clientId];
+        }
+      });
+
+      if (myQueueTicket) {
+        activeRealPeers.push({
+          ...myQueueTicket,
+          isMe: true
+        });
+      }
+
+      activeRealPeers.sort((a, b) => a.joinedAt - b.joinedAt);
+
+      // Adiciona usuários reais na fila (fazendo o total ir de 123 para 124, 125...)
+      activeRealPeers.forEach(realUser => {
+        queueItems.push({
+          nick: realUser.nick,
+          isReal: true,
+          isMe: realUser.clientId === clientId,
+          color: realUser.color || '#53fc18'
+        });
+      });
+
+      let myPos = -1;
+      if (myQueueTicket) {
+        const foundIdx = queueItems.findIndex(item => item.isMe);
+        if (foundIdx !== -1) myPos = foundIdx + 1;
+      }
+
+      return {
+        nowMs,
+        turnIndex,
+        remainingSec,
+        currentPlayerNick,
+        queueItems,
+        totalWaiting: queueItems.length,
+        myPos
+      };
+    }
+
+    function formatTimer(sec) {
+      const s = Math.max(0, sec);
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+    }
+
+    function formatWaitDuration(position) {
+      if (position <= 0) return '—';
+      const totalMins = position * 6;
+      const hours = Math.floor(totalMins / 60);
+      const mins = totalMins % 60;
+      if (hours > 0) return `${hours}h ${mins}min`;
+      return `${mins} min`;
+    }
+
+    // =========================================================================
+    // 4. SINCRONIZAÇÃO EM TEMPO REAL (BROADCASTCHANNEL + MQTT WEBSOCKET)
+    // =========================================================================
+    function setupRealtime() {
+      if (bc) {
+        bc.onmessage = (ev) => processSyncPacket(ev.data);
+      }
+
+      try {
+        if (typeof mqtt !== 'undefined') {
+          mqttClient = mqtt.connect(MQTT_URL, {
+            clientId: 'jgta_web_' + clientId + '_' + Math.floor(Math.random() * 999),
+            clean: true,
+            reconnectPeriod: 4000
+          });
+
+          mqttClient.on('connect', () => {
+            const badge = document.getElementById('sync-badge');
+            if (badge) badge.textContent = 'Ao vivo';
+            mqttClient.subscribe([TOPIC_PRESENCE, TOPIC_CHAT, TOPIC_EVENTS]);
+            sendPresenceHeartbeat();
+          });
+
+          mqttClient.on('message', (_topic, payload) => {
+            try {
+              processSyncPacket(JSON.parse(payload.toString()));
+            } catch (e) {}
+          });
+        }
+      } catch (e) {}
+
+      setInterval(sendPresenceHeartbeat, 6000);
+    }
+
+    function emitPacket(topic, data) {
+      const pkt = { ...data, senderId: clientId, ts: Date.now() };
+      if (bc) bc.postMessage(pkt);
+      if (mqttClient && mqttClient.connected) {
+        mqttClient.publish(topic, JSON.stringify(pkt));
+      }
+    }
+
+    function sendPresenceHeartbeat() {
+      onlinePeersMap[clientId] = {
+        nick: userProfile ? userProfile.nick : 'Visitante',
+        color: userProfile ? userProfile.color : '#64748b',
+        inQueue: Boolean(myQueueTicket),
+        lastSeen: Date.now()
+      };
+
+      emitPacket(TOPIC_PRESENCE, {
+        type: 'presence',
+        nick: userProfile ? userProfile.nick : 'Visitante',
+        color: userProfile ? userProfile.color : '#64748b',
+        inQueue: Boolean(myQueueTicket),
+        ticket: myQueueTicket ? {
+          clientId: myQueueTicket.clientId,
+          nick: myQueueTicket.nick,
+          color: myQueueTicket.color,
+          joinedAt: myQueueTicket.joinedAt,
+          testNext: Boolean(myQueueTicket.testNext)
+        } : null
+      });
+    }
+
+    function processSyncPacket(pkt) {
+      if (!pkt || pkt.senderId === clientId) return;
+
+      if (pkt.type === 'presence') {
+        onlinePeersMap[pkt.senderId] = {
+          nick: pkt.nick || 'Visitante',
+          color: pkt.color || '#64748b',
+          inQueue: Boolean(pkt.inQueue),
+          lastSeen: Date.now()
+        };
+        if (pkt.inQueue && pkt.ticket) {
+          remoteQueuePeers[pkt.senderId] = {
+            ...pkt.ticket,
+            lastSeen: Date.now()
+          };
+        } else {
+          delete remoteQueuePeers[pkt.senderId];
+        }
+        renderAll();
+      } else if (pkt.type === 'chat') {
+        appendChatMessage(pkt.message, false);
+      } else if (pkt.type === 'event') {
+        pushSessionEvent(pkt.text, pkt.color, false);
+      }
+    }
+
+    // =========================================================================
+    // 5. GERENCIAMENTO DE FILA E FLUXO "SUA VEZ!"
+    // =========================================================================
+    function enterQueue() {
+      if (!userProfile) {
+        openProfileModal(true);
+        return;
+      }
+      if (myQueueTicket) return;
+
+      const snap = computeQueueSnapshot();
+      myQueueTicket = {
+        clientId,
+        nick: userProfile.nick,
+        color: userProfile.color,
+        joinedAt: Date.now(),
+        testNext: false
+      };
+      localStorage.setItem('jgta_v2_ticket', JSON.stringify(myQueueTicket));
+      sendPresenceHeartbeat();
+      pushSessionEvent(`${userProfile.nick} entrou na fila (#${snap.totalWaiting + 1})`, 'blue', true);
+      showToast(`Você entrou na fila! Posição #${snap.totalWaiting + 1}`);
+      renderAll();
+    }
+
+    function exitQueue(silent = false) {
+      if (!myQueueTicket) return;
+      const nick = myQueueTicket.nick;
+      myQueueTicket = null;
+      localStorage.removeItem('jgta_v2_ticket');
+      sendPresenceHeartbeat();
+      if (!silent) {
+        pushSessionEvent(`${nick} saiu da fila`, 'amber', true);
+        showToast('Você saiu da fila.');
+      }
+      renderAll();
+    }
+
+    function triggerYourTurnModal() {
+      if (yourTurnOpen || isAllocating) return;
+      yourTurnOpen = true;
+      acceptSecondsLeft = 30;
+
+      document.getElementById('turn-player-nick').textContent = userProfile ? userProfile.nick : (myQueueTicket ? myQueueTicket.nick : 'Jogador');
+      document.getElementById('turn-countdown').textContent = `${acceptSecondsLeft}s`;
+      document.getElementById('turn-step-prompt').style.display = 'block';
+      document.getElementById('turn-step-connecting').style.display = 'none';
+      document.getElementById('your-turn-modal').classList.add('open');
+
+      clearInterval(acceptTimer);
+      acceptTimer = setInterval(() => {
+        acceptSecondsLeft--;
+        document.getElementById('turn-countdown').textContent = `${acceptSecondsLeft}s`;
+        if (acceptSecondsLeft <= 0) {
+          clearInterval(acceptTimer);
+          yourTurnOpen = false;
+          document.getElementById('your-turn-modal').classList.remove('open');
+          exitQueue(true);
+          showToast('Tempo de confirmação esgotado. Vaga passada ao próximo.');
+        }
+      }, 1000);
+    }
+
+    function confirmEnterGame() {
+      if (isAllocating) return;
+      isAllocating = true;
+      clearInterval(acceptTimer);
+
+      document.getElementById('turn-step-prompt').style.display = 'none';
+      document.getElementById('turn-step-connecting').style.display = 'block';
+
+      // Remove a vaga da fila antes de recarregar o site
+      localStorage.removeItem('jgta_v2_ticket');
+      myQueueTicket = null;
+      sendPresenceHeartbeat();
+
+      const statusLine = document.getElementById('connecting-status-line');
+      setTimeout(() => {
+        statusLine.textContent = 'Conectando ao servidor dedicado BR-SP-02...';
+      }, 650);
+
+      setTimeout(() => {
+        statusLine.textContent = 'Iniciando sessão remota...';
+      }, 1300);
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 1850);
+    }
+
+    function declineTurn() {
+      clearInterval(acceptTimer);
+      yourTurnOpen = false;
+      document.getElementById('your-turn-modal').classList.remove('open');
+      exitQueue(false);
+    }
+
+    // =========================================================================
+    // 6. SISTEMA DE CONTAS (CRIAR CONTA / EDITAR PERFIL)
+    // =========================================================================
+    function renderHeaderAccount() {
+      const slot = document.getElementById('header-user-slot');
+      if (userProfile) {
+        const initial = userProfile.nick.charAt(0).toUpperCase();
+        slot.innerHTML = `
+          <button type="button" class="user-chip" onclick="openProfileModal(false)">
+            <div class="avatar-circle" style="background: ${userProfile.color};">${escapeHTML(initial)}</div>
+            <div class="user-chip-info">
+              <div class="user-chip-name">${escapeHTML(userProfile.nick)}</div>
+              <div class="user-chip-sub">Editar perfil</div>
+            </div>
+          </button>
+        `;
+      } else {
+        slot.innerHTML = `
+          <button type="button" class="btn btn-primary btn-sm" onclick="openProfileModal(false)">
+            Entrar / Criar Conta
+          </button>
+        `;
+      }
+    }
+
+    function openProfileModal(autoQueueAfter = false) {
+      const modal = document.getElementById('profile-modal');
+      modal.dataset.autoQueue = autoQueueAfter ? '1' : '0';
+
+      const title = document.getElementById('profile-modal-title');
+      const nickInput = document.getElementById('input-nick');
+      const bioInput = document.getElementById('input-bio');
+      const logoutBtn = document.getElementById('btn-logout');
+
+      if (userProfile) {
+        title.textContent = 'Editar Perfil';
+        nickInput.value = userProfile.nick;
+        bioInput.value = userProfile.bio || '';
+        pickedColor = userProfile.color || AVATAR_COLORS[0];
+        logoutBtn.style.display = 'inline-flex';
+      } else {
+        title.textContent = 'Criar Conta';
+        nickInput.value = '';
+        bioInput.value = '';
+        pickedColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
+        logoutBtn.style.display = 'none';
+      }
+
+      renderColorSwatches();
+      modal.classList.add('open');
+      setTimeout(() => nickInput.focus(), 40);
+    }
+
+    function closeProfileModal() {
+      document.getElementById('profile-modal').classList.remove('open');
+    }
+
+    function renderColorSwatches() {
+      const box = document.getElementById('color-swatches');
+      box.innerHTML = AVATAR_COLORS.map(c => `
+        <button type="button" class="swatch-btn ${pickedColor === c ? 'selected' : ''}" style="background: ${c};" onclick="selectAvatarColor('${c}')"></button>
+      `).join('');
+    }
+
+    function selectAvatarColor(c) {
+      pickedColor = c;
+      renderColorSwatches();
+    }
+
+    function submitProfileForm(e) {
+      e.preventDefault();
+      const nick = document.getElementById('input-nick').value.trim();
+      const bio = document.getElementById('input-bio').value.trim();
+      if (nick.length < 3) return;
+
+      userProfile = { nick, bio, color: pickedColor };
+      localStorage.setItem('jgta_v2_profile', JSON.stringify(userProfile));
+
+      if (myQueueTicket) {
+        myQueueTicket.nick = nick;
+        myQueueTicket.color = pickedColor;
+        localStorage.setItem('jgta_v2_ticket', JSON.stringify(myQueueTicket));
+        sendPresenceHeartbeat();
+      }
+
+      const shouldQueue = document.getElementById('profile-modal').dataset.autoQueue === '1';
+      closeProfileModal();
+      renderHeaderAccount();
+      updateChatPlaceholder();
+      renderAll();
+      showToast(`Perfil salvo: ${nick}`);
+
+      if (shouldQueue && !myQueueTicket) {
+        enterQueue();
+      }
+    }
+
+    function logoutAccount() {
+      exitQueue(true);
+      userProfile = null;
+      localStorage.removeItem('jgta_v2_profile');
+      closeProfileModal();
+      renderHeaderAccount();
+      updateChatPlaceholder();
+      renderAll();
+      showToast('Você saiu da sua conta.');
+    }
+
+    // =========================================================================
+    // 7. CHAT AO VIVO REAL (ZERO BOTS)
+    // =========================================================================
+    function updateChatPlaceholder() {
+      const input = document.getElementById('chat-input');
+      const hint = document.getElementById('chat-status-hint');
+      if (userProfile) {
+        input.placeholder = `Enviar mensagem como ${userProfile.nick}...`;
+        hint.textContent = `Conectado como ${userProfile.nick}`;
+      } else {
+        input.placeholder = 'Crie uma conta para falar no chat...';
+        hint.textContent = 'Entre na sua conta para conversar.';
+      }
+    }
+
+    function sendChatMessage(e) {
+      e.preventDefault();
+      if (!userProfile) {
+        openProfileModal(false);
+        return;
+      }
+
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const now = Date.now();
+      if (now - lastChatTime < 3000) {
+        showToast('Aguarde 3 segundos entre mensagens.');
+        return;
+      }
+
+      lastChatTime = now;
+      input.value = '';
+
+      const msg = {
+        id: clientId + '_' + now,
+        nick: userProfile.nick,
+        color: userProfile.color,
+        text,
+        ts: now
+      };
+
+      appendChatMessage(msg, true);
+      emitPacket(TOPIC_CHAT, { type: 'chat', message: msg });
+    }
+
+    function appendChatMessage(msg, persist = true) {
+      if (!msg || !msg.id) return;
+      if (chatMessages.some(m => m.id === msg.id)) return;
+
+      chatMessages.push(msg);
+      if (chatMessages.length > 80) chatMessages = chatMessages.slice(-80);
+      if (persist) localStorage.setItem('jgta_v2_chat', JSON.stringify(chatMessages));
+
+      if (activeTab !== 'chat') {
+        document.getElementById('chat-dot').classList.add('visible');
+      }
+      renderChatFeed();
+    }
+
+    function renderChatFeed() {
+      const feed = document.getElementById('chat-feed');
+      if (chatMessages.length === 0) {
+        feed.innerHTML = `
+          <div class="chat-empty">
+            <strong>Nenhuma mensagem ainda.</strong>
+            Seja o primeiro a mandar mensagem no chat!
+          </div>
+        `;
+        return;
+      }
+
+      feed.innerHTML = chatMessages.map(m => {
+        const timeStr = new Date(m.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const initial = m.nick.charAt(0).toUpperCase();
+        return `
+          <div class="chat-item">
+            <div class="mini-avatar" style="background: ${escapeHTML(m.color || '#334155')}; color: #0b0d12;">
+              ${escapeHTML(initial)}
+            </div>
+            <div class="chat-bubble">
+              <div class="chat-meta">
+                <span class="chat-author" style="color: ${escapeHTML(m.color || '#f1f5f9')};">${escapeHTML(m.nick)}</span>
+                <span class="chat-time">${timeStr}</span>
+              </div>
+              <div class="chat-text">${escapeHTML(m.text)}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    // =========================================================================
+    // 8. HALL DA FAMA & ÚLTIMOS ACONTECIMENTOS (100% NOMES NOVOS)
+    // =========================================================================
+    const HALL_RANKING = [
+      { rank: 1, nick: 'Henrique_SP', hours: '12h', likes: 44, dislikes: 5, fame: 475 },
+      { rank: 2, nick: 'CaioViana', hours: '10h', likes: 36, dislikes: 9, fame: 370 },
+      { rank: 3, nick: 'BrunaOliveira', hours: '8h', likes: 29, dislikes: 6, fame: 320 },
+      { rank: 4, nick: 'MuriloTech', hours: '7h', likes: 24, dislikes: 8, fame: 220 },
+      { rank: 5, nick: 'DaviLacerda', hours: '6h', likes: 21, dislikes: 7, fame: 195 },
+      { rank: 6, nick: 'VitorHugo_RJ', hours: '5h', likes: 18, dislikes: 4, fame: 190 },
+      { rank: 7, nick: 'MarianaCosta', hours: '5h', likes: 16, dislikes: 3, fame: 180 },
+      { rank: 8, nick: 'pedrinho_011', hours: '4h', likes: 15, dislikes: 5, fame: 145 },
+      { rank: 9, nick: 'GabiNogueira', hours: '4h', likes: 13, dislikes: 4, fame: 135 },
+      { rank: 10, nick: 'RenanAlmeida', hours: '3h', likes: 12, dislikes: 4, fame: 120 }
+    ];
+
+    function renderHallSection() {
+      const podiumEl = document.getElementById('hall-podium');
+      const rowsEl = document.getElementById('hall-rows');
+
+      podiumEl.innerHTML = HALL_RANKING.slice(0, 3).map(p => `
+        <div class="podium-card rank-${p.rank}">
+          <div class="podium-rank">#${p.rank}</div>
+          <div class="podium-avatar">${p.nick.charAt(0).toUpperCase()}</div>
+          <div class="podium-name">${p.nick}</div>
+          <div class="podium-stats">
+            <span>🕒 ${p.hours}</span>
+            <span>👍 ${p.likes}</span>
+            <span>👎 ${p.dislikes}</span>
+          </div>
+          <div class="podium-fame">Fama ${p.fame}</div>
+        </div>
+      `).join('');
+
+      rowsEl.innerHTML = HALL_RANKING.slice(3).map(p => `
+        <div class="hall-row">
+          <div class="hall-row-left">
+            <span class="hall-num">${String(p.rank).padStart(2, '0')}</span>
+            <div class="hall-avatar-sm">${p.nick.charAt(0).toUpperCase()}</div>
+            <div>
+              <div class="hall-info-name">${p.nick}</div>
+              <div class="hall-info-meta">
+                <span>🕒 ${p.hours}</span>
+                <span>👍 ${p.likes}</span>
+                <span>👎 ${p.dislikes}</span>
+              </div>
+            </div>
+          </div>
+          <div class="hall-score">${p.fame}</div>
+        </div>
+      `).join('');
+    }
+
+    function initSessionEvents() {
+      if (sessionEvents.length === 0) {
+        const snap = computeQueueSnapshot();
+        const prev1 = FIXED_123_PLAYERS[(snap.turnIndex - 1 + 123) % 123];
+        const prev2 = FIXED_123_PLAYERS[(snap.turnIndex - 2 + 123) % 123];
+        const prev3 = FIXED_123_PLAYERS[(snap.turnIndex - 3 + 123) % 123];
+        const now = Date.now();
+
+        sessionEvents = [
+          { text: `${snap.currentPlayerNick} assumiu o controle (turno de 06:00)`, color: 'green', ts: now - (SESSION_SECONDS - snap.remainingSec) * 1000 },
+          { text: `${prev1} encerrou a sessão de 6 minutos`, color: 'blue', ts: now - (SESSION_SECONDS - snap.remainingSec) * 1000 - 4000 },
+          { text: `${prev2} completou desafio de fuga em Vice Beach`, color: 'amber', ts: now - 420000 },
+          { text: `${prev3} recebeu +9 likes da comunidade`, color: 'green', ts: now - 780000 }
+        ];
+        localStorage.setItem('jgta_v2_events', JSON.stringify(sessionEvents));
+      }
+      renderEventsList();
+    }
+
+    function pushSessionEvent(text, color = 'blue', broadcast = false) {
+      sessionEvents.unshift({ text, color, ts: Date.now() });
+      if (sessionEvents.length > 10) sessionEvents = sessionEvents.slice(0, 10);
+      localStorage.setItem('jgta_v2_events', JSON.stringify(sessionEvents));
+      renderEventsList();
+
+      if (broadcast) {
+        emitPacket(TOPIC_EVENTS, { type: 'event', text, color });
+      }
+    }
+
+    function renderEventsList() {
+      const container = document.getElementById('events-list');
+      container.innerHTML = sessionEvents.map(ev => {
+        const timeStr = new Date(ev.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        return `
+          <div class="event-row">
+            <div class="event-row-left">
+              <span class="event-dot ${ev.color || 'blue'}"></span>
+              <span class="event-text">${escapeHTML(ev.text)}</span>
+            </div>
+            <span class="event-time">${timeStr}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // =========================================================================
+    // 9. RENDERIZAÇÃO GERAL A CADA SEGUNDO
+    // =========================================================================
+    function renderAll() {
+      const snap = computeQueueSnapshot();
+      const formattedTime = formatTimer(snap.remainingSec);
+      const pct = Math.max(0, Math.min(100, (snap.remainingSec / SESSION_SECONDS) * 100));
+
+      // Relógio UTC
+      document.getElementById('utc-clock').textContent = `UTC ${new Date(snap.nowMs).toISOString().slice(11, 19)}`;
+
+      // Detecta virada de turno de 6 minutos
+      if (lastTurnIndex !== -1 && lastTurnIndex !== snap.turnIndex) {
+        pushSessionEvent(`${snap.currentPlayerNick} iniciou turno de 6 minutos`, 'green', false);
+        if (myQueueTicket && snap.myPos === 1) {
+          triggerYourTurnModal();
+        }
+      }
+      lastTurnIndex = snap.turnIndex;
+
+      // Jogador Atual
+      document.getElementById('active-player-name').textContent = snap.currentPlayerNick;
+      document.getElementById('active-player-avatar').textContent = snap.currentPlayerNick.charAt(0).toUpperCase();
+      document.getElementById('bottom-playing-nick').textContent = snap.currentPlayerNick;
+      document.getElementById('turn-id').textContent = snap.turnIndex % 10000;
+
+      // Cronômetro 06:00
+      document.getElementById('main-timer').textContent = formattedTime;
+      document.getElementById('metric-time-left').textContent = formattedTime;
+      document.getElementById('timer-progress').style.width = `${pct}%`;
+
+      // Contadores de Fila (123 fixos + usuários reais = 124)
+      document.getElementById('metric-queue-size').textContent = snap.totalWaiting;
+      document.getElementById('tab-queue-num').textContent = snap.totalWaiting;
+
+      // Online
+      const activeOnlineCount = Object.values(onlinePeersMap).filter(p => snap.nowMs - p.lastSeen < 30000).length;
+      const totalOnline = 208 + (snap.turnIndex % 19) + Math.max(1, activeOnlineCount);
+      document.getElementById('metric-online').textContent = totalOnline;
+      document.getElementById('online-tab-count').textContent = totalOnline;
+
+      // Likes/Dislikes por turno
+      const baseLikes = 7 + (snap.turnIndex % 15);
+      const baseDislikes = snap.turnIndex % 4;
+      const userVote = votedTurns[snap.turnIndex];
+      document.getElementById('likes-count').textContent = baseLikes + (userVote === 'like' ? 1 : 0);
+      document.getElementById('dislikes-count').textContent = baseDislikes + (userVote === 'dislike' ? 1 : 0);
+      document.getElementById('btn-like').className = `vote-btn ${userVote === 'like' ? 'voted-like' : ''}`;
+      document.getElementById('btn-dislike').className = `vote-btn ${userVote === 'dislike' ? 'voted-dislike' : ''}`;
+
+      // Próximos 3 na fila
+      const next3 = snap.queueItems.slice(0, 3);
+      document.getElementById('next-pills-container').innerHTML = next3.map((item, idx) => `
+        <span class="next-pill ${item.isMe ? 'is-me' : ''}">
+          #${idx + 1} <strong>${escapeHTML(item.nick)}</strong>
+        </span>
+      `).join('');
+
+      // Caixa Central do Console + Toolbar + Sidebar CTA
+      renderQueueControls(snap);
+
+      // Listas das abas
+      if (activeTab === 'queue') {
+        renderQueueTab(snap);
+      } else if (activeTab === 'online') {
+        renderOnlineTab(snap);
+      }
+    }
+
+    function renderQueueControls(snap) {
+      const heroBox = document.getElementById('hero-queue-box');
+      const toolbarLeft = document.getElementById('toolbar-primary-actions');
+      const sidebarTitle = document.getElementById('sidebar-pos-title');
+      const sidebarEta = document.getElementById('sidebar-eta-text');
+      const sidebarCta = document.getElementById('sidebar-cta-slot');
+      const jumpBtn = document.getElementById('btn-jump-me');
+
+      if (!myQueueTicket) {
+        heroBox.innerHTML = `
+          <div class="queue-banner-text">
+            <h3>Fila aberta para turno gratuito de 6 minutos</h3>
+            <p>Atualmente há <strong style="color: var(--text-main);">${snap.totalWaiting} jogadores</strong> aguardando. Sua posição fica salva mesmo atualizando a página.</p>
+          </div>
+          <button type="button" class="btn btn-primary" onclick="enterQueue()">
+            + Entrar na Fila (#${snap.totalWaiting + 1})
+          </button>
+        `;
+
+        toolbarLeft.innerHTML = `
+          <button type="button" class="btn btn-primary btn-sm" onclick="enterQueue()">+ Entrar na Fila</button>
+        `;
+
+        sidebarTitle.textContent = `Fora da fila • ${snap.totalWaiting} aguardando`;
+        sidebarEta.textContent = `Tempo estimado ao entrar: ${formatWaitDuration(snap.totalWaiting + 1)}`;
+        sidebarCta.innerHTML = `
+          <button type="button" class="btn btn-primary" style="width: 100%;" onclick="enterQueue()">
+            Entrar na Fila de 6 min (#${snap.totalWaiting + 1})
+          </button>
+        `;
+        jumpBtn.style.display = 'none';
+      } else {
+        heroBox.innerHTML = `
+          <div class="queue-banner-text">
+            <h3>Você está na fila • Posição <span class="mono" style="color: var(--accent-green);">#${snap.myPos}</span> de ${snap.totalWaiting}</h3>
+            <p>Espera estimada: <strong style="color: var(--text-main);">${formatWaitDuration(snap.myPos)}</strong> • Vaga vinculada à sua conta.</p>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-danger btn-sm" onclick="exitQueue(false)">Sair da Fila</button>
+          </div>
+        `;
+
+        toolbarLeft.innerHTML = `
+          <button type="button" class="btn btn-danger btn-sm" onclick="exitQueue(false)">Sair da Fila (#${snap.myPos})</button>
+        `;
+
+        sidebarTitle.innerHTML = `Sua posição na fila: <span class="pos-num">#${snap.myPos}</span> <span style="font-weight: 400; color: var(--text-muted); font-size: 12px;">/ ${snap.totalWaiting}</span>`;
+        sidebarEta.textContent = `Tempo estimado: ${formatWaitDuration(snap.myPos)}`;
+        sidebarCta.innerHTML = `
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn btn-sm" style="flex: 1; border-color: rgba(83, 252, 24, 0.35); color: var(--accent-green);" disabled>
+              ✓ Você está na fila
+            </button>
+            <button type="button" class="btn btn-danger btn-sm" onclick="exitQueue(false)">Sair</button>
+          </div>
+        `;
+        jumpBtn.style.display = 'inline-block';
+      }
+    }
+
+    function renderQueueTab(snap) {
+      const listEl = document.getElementById('queue-list');
+      const prevScroll = listEl.scrollTop;
+
+      const playingRow = `
+        <div class="queue-row now-playing">
+          <div class="queue-row-left">
+            <span class="queue-rank" style="color: var(--accent-blue); font-weight: 800;">#00</span>
+            <div class="mini-avatar" style="background: rgba(56, 189, 248, 0.2); color: var(--accent-blue);">
+              ${escapeHTML(snap.currentPlayerNick.charAt(0).toUpperCase())}
+            </div>
+            <span class="queue-nick">${escapeHTML(snap.currentPlayerNick)}</span>
+            <span class="badge-tag live">JOGANDO</span>
+          </div>
+          <span class="queue-wait">${formatTimer(snap.remainingSec)}</span>
+        </div>
+      `;
+
+      const rowsHtml = snap.queueItems.map((item, idx) => {
+        const pos = idx + 1;
+        return `
+          <div class="queue-row ${item.isMe ? 'is-me' : ''}" id="${item.isMe ? 'my-fila-item' : ''}">
+            <div class="queue-row-left">
+              <span class="queue-rank">#${pos}</span>
+              <div class="mini-avatar" style="${item.isReal ? `background:${item.color}; color:#0b0d12;` : ''}">
+                ${escapeHTML(item.nick.charAt(0).toUpperCase())}
+              </div>
+              <span class="queue-nick">${escapeHTML(item.nick)}</span>
+              ${item.isMe ? '<span class="badge-tag you">VOCÊ</span>' : ''}
+            </div>
+            <span class="queue-wait">${formatWaitDuration(pos)}</span>
+          </div>
+        `;
+      }).join('');
+
+      listEl.innerHTML = playingRow + rowsHtml;
+      listEl.scrollTop = prevScroll;
+    }
+
+    function renderOnlineTab(snap) {
+      const listEl = document.getElementById('online-users-list');
+      const realPeers = Object.values(onlinePeersMap).filter(p => snap.nowMs - p.lastSeen < 30000);
+      const sampleActive = [
+        { nick: snap.currentPlayerNick, status: 'No controle agora', color: '#38bdf8' },
+        ...realPeers.map(p => ({
+          nick: p.nick,
+          status: p.inQueue ? 'Na fila de espera' : 'No canal',
+          color: p.color || '#53fc18'
+        })),
+        ...snap.queueItems.slice(0, 18).map(q => ({
+          nick: q.nick,
+          status: 'Aguardando turno',
+          color: '#334155'
+        }))
+      ];
+
+      listEl.innerHTML = sampleActive.map(u => `
+        <div class="queue-row">
+          <div class="queue-row-left">
+            <div class="mini-avatar" style="background: ${u.color}; color: ${u.color === '#334155' ? '#f1f5f9' : '#0b0d12'};">
+              ${escapeHTML(u.nick.charAt(0).toUpperCase())}
+            </div>
+            <div>
+              <div class="queue-nick" style="font-weight: 700;">${escapeHTML(u.nick)}</div>
+              <div style="font-size: 10px; color: var(--text-dim);">${escapeHTML(u.status)}</div>
+            </div>
+          </div>
+          <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--accent-green);"></span>
+        </div>
+      `).join('');
+    }
+
+    // =========================================================================
+    // 10. INTERAÇÕES DE UI (ABAS, VOTOS, MODAIS, TOASTS)
+    // =========================================================================
+    function switchTab(tabName) {
+      activeTab = tabName;
+      ['queue', 'chat', 'online'].forEach(name => {
+        document.getElementById(`tab-${name}`).classList.toggle('active', name === tabName);
+        document.getElementById(`pane-${name}`).classList.toggle('active', name === tabName);
+      });
+
+      if (tabName === 'chat') {
+        document.getElementById('chat-dot').classList.remove('visible');
+        renderChatFeed();
+      } else {
+        renderAll();
+      }
+    }
+
+    function jumpToMe() {
+      const el = document.getElementById('my-fila-item');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function castVote(type) {
+      const snap = computeQueueSnapshot();
+      if (votedTurns[snap.turnIndex] === type) return;
+      votedTurns[snap.turnIndex] = type;
+      localStorage.setItem('jgta_v2_votes', JSON.stringify(votedTurns));
+      renderAll();
+      showToast(type === 'like' ? 'Like registrado para o jogador atual!' : 'Avaliação registrada.');
+    }
+
+    function openChallengesModal() {
+      document.getElementById('info-modal-title').textContent = 'Desafios da Sessão';
+      document.getElementById('info-modal-body').innerHTML = `
+        <div style="padding: 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;">
+          <strong style="color: var(--text-main);">1. Fuga em Vice Beach (+25 Fama)</strong><br/>
+          Escape de 3 estrelas de procurado antes dos 6 minutos acabarem.
+        </div>
+        <div style="padding: 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;">
+          <strong style="color: var(--text-main);">2. Direção Limpa (+15 Fama)</strong><br/>
+          Atravesse a ponte principal sem colidir o veículo durante o turno.
+        </div>
+        <div style="padding: 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;">
+          <strong style="color: var(--text-main);">3. Aprovação da Comunidade (+20 Fama)</strong><br/>
+          Receba mais de 15 likes positivos durante os seus 6 minutos.
+        </div>
+      `;
+      document.getElementById('info-modal').classList.add('open');
+    }
+
+    function openRulesInfo() {
+      document.getElementById('info-modal-title').textContent = 'Regras da Fila Comunitária';
+      document.getElementById('info-modal-body').innerHTML = `
+        <p><strong style="color: var(--text-main);">• Turnos de 6 minutos:</strong> Cada jogador permanece no controle remoto por exatos 06:00 minutos.</p>
+        <p><strong style="color: var(--text-main);">• Fila persistente:</strong> Sua posição fica salva na sua conta mesmo se fechar ou atualizar a aba.</p>
+        <p><strong style="color: var(--text-main);">• Confirmação rápida:</strong> Ao chegar sua vez, confirme em até 30 segundos para iniciar a instância.</p>
+        <p><strong style="color: var(--text-main);">• Respeito no chat:</strong> Mensagens ofensivas ou spam resultam na remoção da conta.</p>
+      `;
+      document.getElementById('info-modal').classList.add('open');
+    }
+
+    function closeInfoModal() {
+      document.getElementById('info-modal').classList.remove('open');
+    }
+
+    function showToast(text) {
+      const stack = document.getElementById('toast-stack');
+      const div = document.createElement('div');
+      div.className = 'toast-msg';
+      div.textContent = text;
+      stack.appendChild(div);
+      setTimeout(() => {
+        div.style.opacity = '0';
+        div.style.transition = 'opacity 0.25s';
+        setTimeout(() => div.remove(), 260);
+      }, 3000);
+    }
+
+    function escapeHTML(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // =========================================================================
+    // 11. INICIALIZAÇÃO
+    // =========================================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      renderHeaderAccount();
+      updateChatPlaceholder();
+      renderChatFeed();
+      renderHallSection();
+      initSessionEvents();
+      setupRealtime();
+      renderAll();
+
+      setInterval(() => {
+        renderAll();
+        const pingEl = document.getElementById('ping-val');
+        if (pingEl) pingEl.textContent = `${14 + Math.floor(Math.random() * 5)} ms`;
+      }, 1000);
+    });
+  </script>
+</body>
+</html>
